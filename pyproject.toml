@@ -1,16 +1,23 @@
 [project]
 name = "mimedy"
 version = "0.1.0"
-description = "Add your description here"
+description = "Organize messy folders by real file type, detected from content with Google Magika"
 readme = "README.md"
 requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "Olivier Chapeau" }]
 dependencies = [
     "magika>=0.6.2",
     "pyyaml>=6.0.2",
     "typer>=0.16",
 ]
+
 [project.scripts]
-mimedy = "main:main"
+mimedy = "mimedy.main:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
@@ -20,7 +27,8 @@ dev = [
 
 [tool.ruff]
 line-length = 88
-target-version = "py313"
+target-version = "py310"
+src = ["src"]
 
 [tool.ruff.lint]
 select = [
