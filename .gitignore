@@ -1,0 +1,28 @@
+# Local test data
+test*/
+
+# Personal config (see config.example.yaml)
+config.yaml
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Virtual environment
+.venv/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

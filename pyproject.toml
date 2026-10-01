@@ -1,0 +1,48 @@
+[project]
+name = "mimedy"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "magika>=0.6.2",
+    "pyyaml>=6.0.2",
+    "typer>=0.16",
+]
+[project.scripts]
+mimedy = "main:main"
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.6.2",
+    "ruff>=0.16.9",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py313"
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes (unused imports/variables, undefined names)
+    "I",     # isort (import sorting)
+    "N",     # pep8-naming
+    "UP",    # pyupgrade (modern syntax)
+    "B",     # flake8-bugbear (likely bugs)
+    "A",     # flake8-builtins (shadowing builtins)
+    "C4",    # flake8-comprehensions
+    "SIM",   # flake8-simplify
+    "RET",   # flake8-return
+    "PTH",   # flake8-use-pathlib
+    "BLE",   # flake8-blind-except
+    "TRY",   # tryceratops (exception handling)
+    "LOG",   # flake8-logging
+    "G",     # flake8-logging-format
+    "T20",   # flake8-print (no print/pprint)
+    "S",     # flake8-bandit (security)
+    "ANN",   # flake8-annotations (type hints)
+    "PL",    # pylint
+    "RUF",   # ruff-specific rules
+]

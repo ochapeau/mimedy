@@ -1,0 +1,69 @@
+# mimedy — example configuration
+#
+# Copy this file to config.yaml and adapt it to your needs:
+#   cp config.example.yaml config.yaml
+#
+# Every key is optional: missing keys fall back to the built-in defaults.
+#
+# Rules are applied in this order (first match wins):
+#   1. hidden       -> files whose name starts with '.'
+#   2. large_files  -> files bigger than threshold_mb
+#   3. extensions   -> exact extension match (cheap, no content analysis)
+#   4. mimetypes    -> MIME type detected by Magika from the file content
+#   5. fallback     -> Magika content group (Image, Video, Code, Document, ...)
+
+# Destination folder for hidden files (.env, .bashrc, ...)
+hidden: "Hidden"
+
+# Large files are moved aside before any content analysis.
+# Sizes are in decimal MB (1 MB = 1000 * 1000 bytes), like Finder/Explorer.
+large_files:
+  threshold_mb: 500
+  target_dir: "Large"
+
+# Extension rules: use them for formats Magika cannot know about,
+# or when the extension carries more meaning than the content
+# (a .blend is "Blender", not just "unknown binary").
+extensions:
+  # Creative tools
+  .blend: "Blender"
+  .psd: "Photoshop"
+  .kra: "Krita"
+  .gd: "Godot"
+  .tscn: "Godot"
+  # Data files (Magika would otherwise group them under "code" or "text")
+  .csv: "Data"
+  .json: "Data"
+  .yaml: "Data"
+  .yml: "Data"
+  .toml: "Data"
+  # Disk images and installers
+  .dmg: "Installers"
+  .pkg: "Installers"
+  .msi: "Installers"
+  .iso: "Disk Images"
+
+# MIME type rules: matched against Magika's detection, so they work
+# even when the extension is wrong or missing.
+mimetypes:
+  # Documents
+  application/pdf: "PDF"
+  application/epub+zip: "Books"
+  application/msword: "Documents"
+  application/vnd.openxmlformats-officedocument.wordprocessingml.document: "Documents"
+  application/vnd.openxmlformats-officedocument.spreadsheetml.sheet: "Spreadsheets"
+  application/vnd.openxmlformats-officedocument.presentationml.presentation: "Presentations"
+  # Images
+  image/jpeg: "Photos"
+  image/heic: "Photos"
+  image/png: "Images"
+  image/svg+xml: "Vector"
+  # Archives
+  application/zip: "Archives"
+  application/x-tar: "Archives"
+  application/gzip: "Archives"
+  application/x-7z-compressed: "Archives"
+  # Code
+  text/x-python: "Python"
+  text/x-c: "C"
+  text/x-c++: "C++"
