@@ -21,20 +21,23 @@ La plupart des outils de rangement se fient à l'extension. Or une extension peu
 $ mimedy ~/Downloads --config config.example.yaml
 [INFO] Loaded config from config.example.yaml
 [INFO] Organizing /Users/me/Downloads
-[INFO] Moved '02-gates.pdf' → PDF/
-[INFO] Moved 'capsule_wardrobe.csv' → Data/
-[INFO] Moved 'photo_2025-04-14_16-07-14.jpg' → Photos/
-[INFO] Moved 'random.bin' → Unknown/
-[INFO] Moved 'systeme_io.pdf' → PDF/systeme_io (1).pdf
-[INFO] Moved 'vid.mp4' → Video/
-[INFO] Done: 19 files moved into 12 folders
+[INFO] 'export.csv' → Data/
+[INFO] 'holidays.jpg' → Photos/
+[INFO] 'invoice' → PDF/
+[INFO] 'report.pdf' → PDF/report (1).pdf
+[INFO] 'script.py' → Python/
+[WARNING] Skipped 'locked.txt': Magika could not read the file (permission_error)
+[INFO] 5 files to move into 4 folders, 1 skipped
+Move 5 files? [y/N]: y
+[INFO] Done: 5 moved, 0 failed
 ```
 
 ### Fonctionnalités
 
 - 🧠 **Détection par le contenu** : Magika reconnaît plus de 200 types de fichiers, même renommés ou sans extension.
 - 🪜 **Règles en cascade** : fichiers cachés, fichiers volumineux, extensions, types MIME, puis le groupe Magika en dernier recours.
-- 🔍 **Mode `--dry-run`** : affiche ce qui serait déplacé, sans rien toucher.
+- 📋 **Plan puis confirmation** : tous les déplacements sont affichés avant d'être effectués, et rien ne bouge sans votre accord. `--dry-run` s'arrête au plan.
+- 🧯 **Robuste** : un fichier illisible ou verrouillé est signalé et ignoré, sans interrompre le rangement.
 - 🛡️ **Aucun écrasement** : si `photo.jpg` existe déjà, le nouveau fichier devient `photo (1).jpg`.
 - 🐛 **Mode `--verbose`** : indique pour chaque fichier la règle qui a décidé de sa destination.
 - ⚙️ **Configuration YAML** simple, entièrement facultative.
@@ -51,14 +54,17 @@ uv sync
 
 ### Utilisation
 
-> 💡 Commencez toujours par un `--dry-run` pour vérifier le résultat avant de déplacer quoi que ce soit.
+> 💡 mimedy affiche toujours le plan complet et demande confirmation avant de déplacer quoi que ce soit.
 
 ```bash
-# Aperçu, sans rien déplacer
+# Afficher le plan, puis confirmer
+uv run mimedy ~/Downloads
+
+# Afficher le plan seulement
 uv run mimedy ~/Downloads --dry-run
 
-# Rangement réel avec une configuration personnalisée
-uv run mimedy ~/Downloads --config my-config.yaml
+# Sans confirmation, par exemple dans un script
+uv run mimedy ~/Downloads --yes --config my-config.yaml
 
 # Comprendre pourquoi un fichier va à tel endroit
 uv run mimedy ~/Downloads --dry-run --verbose
@@ -69,10 +75,17 @@ uv run mimedy ~/Downloads --dry-run --verbose
 | `DIRECTORY` | Dossier à ranger *(obligatoire)*. |
 | `--config PATH` | Fichier de configuration YAML *(par défaut : `config.yaml` dans le dossier courant)*. |
 | `--dry-run` | Affiche les déplacements prévus sans les effectuer. |
+| `--yes`, `-y` | Déplace sans demander de confirmation. |
 | `--verbose`, `-v` | Affiche la règle appliquée à chaque fichier. |
 | `--lowercase` | Garde en minuscules les dossiers nommés d'après Magika (`video/` au lieu de `Video/`). |
 
 Seuls les fichiers situés directement dans le dossier sont traités. Les sous-dossiers existants ne sont pas touchés, ce qui permet de relancer l'outil sans risque.
+
+| Code de sortie | Signification |
+| :-: | :--- |
+| `0` | Tout s'est bien passé, ou il n'y avait rien à ranger. |
+| `1` | Au moins un fichier n'a pas pu être traité, ou la confirmation a été refusée. |
+| `2` | Arguments ou configuration invalides. |
 
 ### Configuration
 
@@ -122,7 +135,8 @@ mimedy/
 ├── pyproject.toml
 └── src/mimedy/
     ├── main.py           # Point d'entrée de la CLI (Typer)
-    ├── organizer.py      # Règles de classement et déplacement des fichiers
+    ├── organizer.py      # Règles de classement, planification et déplacements
+    ├── errors.py         # Exceptions du projet
     └── utils.py          # Chargement de la configuration et des logs
 ```
 
@@ -162,20 +176,23 @@ Most organizing tools trust file extensions. But an extension can lie, be missin
 $ mimedy ~/Downloads --config config.example.yaml
 [INFO] Loaded config from config.example.yaml
 [INFO] Organizing /Users/me/Downloads
-[INFO] Moved '02-gates.pdf' → PDF/
-[INFO] Moved 'capsule_wardrobe.csv' → Data/
-[INFO] Moved 'photo_2025-04-14_16-07-14.jpg' → Photos/
-[INFO] Moved 'random.bin' → Unknown/
-[INFO] Moved 'systeme_io.pdf' → PDF/systeme_io (1).pdf
-[INFO] Moved 'vid.mp4' → Video/
-[INFO] Done: 19 files moved into 12 folders
+[INFO] 'export.csv' → Data/
+[INFO] 'holidays.jpg' → Photos/
+[INFO] 'invoice' → PDF/
+[INFO] 'report.pdf' → PDF/report (1).pdf
+[INFO] 'script.py' → Python/
+[WARNING] Skipped 'locked.txt': Magika could not read the file (permission_error)
+[INFO] 5 files to move into 4 folders, 1 skipped
+Move 5 files? [y/N]: y
+[INFO] Done: 5 moved, 0 failed
 ```
 
 ### Features
 
 - 🧠 **Content-based detection**: Magika recognizes over 200 file types, even when renamed or missing an extension.
 - 🪜 **Cascading rules**: hidden files, large files, extensions, MIME types, then the Magika group as a fallback.
-- 🔍 **`--dry-run` mode**: shows what would be moved, without touching anything.
+- 📋 **Plan, then confirm**: every move is shown before it happens, and nothing moves without your approval. `--dry-run` stops at the plan.
+- 🧯 **Robust**: an unreadable or locked file is reported and skipped, without stopping the run.
 - 🛡️ **Never overwrites**: if `photo.jpg` already exists, the new file becomes `photo (1).jpg`.
 - 🐛 **`--verbose` mode**: shows which rule decided each file's destination.
 - ⚙️ **Simple YAML configuration**, entirely optional.
@@ -192,14 +209,17 @@ uv sync
 
 ### Usage
 
-> 💡 Always start with `--dry-run` to check the result before anything is moved.
+> 💡 mimedy always shows the full plan and asks for confirmation before moving anything.
 
 ```bash
-# Preview, without moving anything
+# Show the plan, then confirm
+uv run mimedy ~/Downloads
+
+# Only show the plan
 uv run mimedy ~/Downloads --dry-run
 
-# Actually organize, with a custom configuration
-uv run mimedy ~/Downloads --config my-config.yaml
+# No confirmation, e.g. in a script
+uv run mimedy ~/Downloads --yes --config my-config.yaml
 
 # Understand why a file goes where it goes
 uv run mimedy ~/Downloads --dry-run --verbose
@@ -210,10 +230,17 @@ uv run mimedy ~/Downloads --dry-run --verbose
 | `DIRECTORY` | Folder to organize *(required)*. |
 | `--config PATH` | YAML configuration file *(default: `config.yaml` in the current directory)*. |
 | `--dry-run` | Show planned moves without performing them. |
+| `--yes`, `-y` | Move without asking for confirmation. |
 | `--verbose`, `-v` | Show which rule applied to each file. |
 | `--lowercase` | Keep folders named after Magika groups lowercase (`video/` instead of `Video/`). |
 
 Only files directly inside the folder are processed. Existing subfolders are left untouched, so the tool can safely be run again.
+
+| Exit code | Meaning |
+| :-: | :--- |
+| `0` | Everything went fine, or there was nothing to organize. |
+| `1` | At least one file could not be processed, or the confirmation was declined. |
+| `2` | Invalid arguments or configuration. |
 
 ### Configuration
 
@@ -263,7 +290,8 @@ mimedy/
 ├── pyproject.toml
 └── src/mimedy/
     ├── main.py           # CLI entry point (Typer)
-    ├── organizer.py      # Classification rules and file moves
+    ├── organizer.py      # Classification rules, planning and moves
+    ├── errors.py         # Project exceptions
     └── utils.py          # Configuration and logging setup
 ```
 

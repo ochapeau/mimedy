@@ -4,6 +4,8 @@ from typing import Any
 
 import yaml
 
+from mimedy.errors import ConfigError
+
 logger = logging.getLogger("mimedy.utils")
 
 # Default values of config:
@@ -50,5 +52,15 @@ def load_config(config_path: Path) -> dict[str, Any]:
     except FileNotFoundError:
         logger.warning("Config file not found: %s, using defaults", config_path)
         return DEFAULT_CONFIG.copy()
+    except OSError as err:
+        msg = f"Cannot read {config_path}: {err.strerror}"
+        raise ConfigError(msg) from err
+    except yaml.YAMLError as err:
+        msg = f"Invalid YAML in {config_path}: {err}"
+        raise ConfigError(msg) from err
+
+    if not isinstance(user_config, dict):
+        msg = f"Invalid config in {config_path}: expected a mapping of settings"
+        raise ConfigError(msg)
     logger.info("Loaded config from %s", config_path)
     return merge_config(user_config)
