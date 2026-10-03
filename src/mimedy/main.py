@@ -1,12 +1,14 @@
+"""Command-line interface of mimedy."""
+
 import logging
 from pathlib import Path
 from typing import Annotated
 
 import typer
 
+from mimedy.config import load_config
 from mimedy.errors import ConfigError
 from mimedy.organizer import execute, log_plan, plan_moves
-from mimedy.utils import init_logging, load_config
 
 # Exit codes
 EXIT_OK = 0
@@ -16,6 +18,18 @@ EXIT_FAILURES = 1  # the run completed, but at least one file failed
 logger = logging.getLogger("mimedy.main")
 
 app = typer.Typer(no_args_is_help=True, add_completion=False)
+
+
+def init_logging(*, verbose: bool = False) -> None:
+    """Configure log output: short messages, or detailed ones with --verbose."""
+    if verbose:
+        log_format = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    else:
+        log_format = "[%(levelname)s] %(message)s"
+    logging.basicConfig(format=log_format)
+
+    # Only our own loggers go down to DEBUG, not third-party libraries
+    logging.getLogger("mimedy").setLevel(logging.DEBUG if verbose else logging.INFO)
 
 
 @app.command()
@@ -52,9 +66,9 @@ def main(  # noqa: PLR0913, PLR0917 (one parameter per CLI option)
 
     try:
         config = load_config(config_path)
-    except ConfigError as err:
+    except ConfigError as e:
         # Reported by Typer as a usage error, with exit code 2
-        raise typer.BadParameter(str(err), param_hint="--config") from err
+        raise typer.BadParameter(str(e), param_hint="--config") from e
 
     # Phase 1: decide where every file goes, without touching anything
     logger.info("Organizing %s", directory)

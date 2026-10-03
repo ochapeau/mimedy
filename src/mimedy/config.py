@@ -20,15 +20,26 @@ logger = logging.getLogger("mimedy.config")
 
 @dataclass(frozen=True)
 class LargeFilesConfig:
-    """The config for large files."""
+    """Where files bigger than threshold_mb (decimal MB) are moved."""
 
-    threshold_mb: int = 100
+    threshold_mb: float = 100
     target_dir: str = "Large"
 
 
 @dataclass(frozen=True)
 class Config:
-    """A config to load."""
+    """The validated configuration, as returned by load_config().
+
+    The rest of the program can rely on these guarantees:
+
+    - every destination folder is a non-empty relative path that stays
+      inside the organized folder, normalized ("Code/Python", never
+      "./Code//Python/", "/tmp" or "../Data")
+    - extension keys are lowercase and start with a dot (".jpg"), so
+      they must be compared with file.suffix.lower()
+    - MIME type keys are lowercase ("application/pdf")
+    - no two rules conflict once normalized
+    """
 
     hidden: str = "Hidden"
     large_files: LargeFilesConfig = field(default_factory=LargeFilesConfig)
@@ -37,7 +48,10 @@ class Config:
 
 
 def check_unknown_keys(data: dict, config_class: type, errors: list[str]) -> None:
-    """Add an error for each key of data that is not a field of config_class."""
+    """Add an error for each key of data that is not a field of config_class.
+
+    A likely typo gets a suggestion: "did you mean 'extensions'?".
+    """
     authorized_keys = {f.name for f in fields(config_class)}
     unknown_keys = data.keys() - authorized_keys
     for key in sorted(unknown_keys):
@@ -49,7 +63,7 @@ def check_unknown_keys(data: dict, config_class: type, errors: list[str]) -> Non
 
 
 def read_dir(value: object, key: str, errors: list[str]) -> str | None:
-    """A destination folder, relative to the organized folder.
+    """Read a destination folder, relative to the organized folder.
 
     It must be a non-empty relative path that stays inside the organized
     folder. Surrounding spaces are stripped and the path is normalized
@@ -89,7 +103,8 @@ def read_dir(value: object, key: str, errors: list[str]) -> str | None:
 
 
 def read_threshold(value: object, key: str, errors: list[str]) -> float | None:
-    """A strictly positive number, booleans excluded."""
+    """Read a strictly positive number, booleans excluded."""
+    # YAML reads "yes" as True, and True is an int in Python: reject it first
     if isinstance(value, bool):
         errors.append(f"'{key}' must be a number, got bool")
         return None
@@ -114,7 +129,10 @@ def add_section_errors(
 
 
 def normalize_extension(extension: str) -> str:
-    """'.JPG' -> '.jpg', 'csv' -> '.csv'. Raises ValueError if empty."""
+    """Normalize an extension: '.JPG' -> '.jpg', 'csv' -> '.csv'.
+
+    Raise ValueError for an empty extension ("" or ".").
+    """
     name = extension.lower().removeprefix(".")
     if not name:
         msg = "is not a valid extension"
@@ -125,7 +143,11 @@ def normalize_extension(extension: str) -> str:
 def read_mapping(
     value: object, key: str, errors: list[str], normalize: Callable[[str], str]
 ) -> dict[str, str] | None:
-    """A mapping of strings to strings (extensions, mimetypes)."""
+    """Read a mapping of rules to destination folders (extensions, mimetypes).
+
+    Keys go through normalize. Two keys that become the same rule are
+    accepted when they point to the same folder, and reported otherwise.
+    """
     if not isinstance(value, dict):
         errors.append(f"'{key}' must be a mapping, got {type(value).__name__}")
         return None
@@ -133,6 +155,7 @@ def read_mapping(
     # Errors are grouped under the mapping's name, e.g. "In 'extensions':"
     mapping_errors: list[str] = []
     mapping: dict[str, str] = {}
+    # Normalized rule -> rule as written, to name both sides of a conflict
     origins: dict[str, str] = {}
     for rule, dest in value.items():
         if not isinstance(rule, str):
@@ -168,7 +191,7 @@ def read_mapping(
 
 
 def read_large_files(value: object, errors: list[str]) -> LargeFilesConfig | None:
-    """The large_files section: a mapping with threshold_mb and target_dir."""
+    """Read the large_files section: threshold_mb and target_dir."""
     if not isinstance(value, dict):
         errors.append(f"'large_files' must be a mapping, got {type(value).__name__}")
         return None
@@ -197,20 +220,24 @@ def read_large_files(value: object, errors: list[str]) -> LargeFilesConfig | Non
 
 
 def load_config(config_path: Path) -> Config:
+    """Load and validate the YAML configuration file.
+
+    A missing file gives the default configuration. Any invalid content
+    raises a ConfigError listing every problem found.
+    """
     try:
         with config_path.open() as f:
             config_to_load = yaml.safe_load(f) or {}
     except FileNotFoundError:
         logger.warning("Config file not found: %s, using defaults", config_path)
         return Config()
-    except OSError as err:
-        msg = f"Cannot read {config_path}: {err.strerror}"
-        raise ConfigError(msg) from err
-    except yaml.YAMLError as err:
-        msg = f"Invalid YAML in {config_path}: {err}"
-        raise ConfigError(msg) from err
+    except OSError as e:
+        msg = f"Cannot read {config_path}: {e.strerror}"
+        raise ConfigError(msg) from e
+    except yaml.YAMLError as e:
+        msg = f"Invalid YAML in {config_path}: {e}"
+        raise ConfigError(msg) from e
 
-    # Safety check that config_to_load is a mapping
     if not isinstance(config_to_load, dict):
         msg = f"Invalid config in {config_path}: expected a mapping of settings"
         raise ConfigError(msg)
@@ -219,7 +246,6 @@ def load_config(config_path: Path) -> Config:
     errors: list[str] = []
     check_unknown_keys(config_to_load, Config, errors)
 
-    # Build the config
     config_kwargs = {}
     if "hidden" in config_to_load:
         hidden = read_dir(config_to_load["hidden"], "hidden", errors)
@@ -238,11 +264,9 @@ def load_config(config_path: Path) -> Config:
         if mimetypes is not None:
             config_kwargs["mimetypes"] = mimetypes
 
-    # Get the large files config
     large_files_config = config_to_load.get("large_files", {})
     large_files = read_large_files(large_files_config, errors)
 
-    # Errors check
     if errors:
         details = "\n".join(f"  - {error}" for error in errors)
         msg = f"Invalid config in {config_path}:\n{details}"

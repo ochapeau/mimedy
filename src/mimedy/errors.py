@@ -1,3 +1,6 @@
+"""Exceptions raised by mimedy."""
+
+
 class MimedyError(Exception):
     """Base class for all mimedy errors."""
 
