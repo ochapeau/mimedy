@@ -6,6 +6,7 @@ validates every value before building the dataclasses.
 """
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field, fields
 from difflib import get_close_matches
 from pathlib import Path, PurePath
@@ -112,7 +113,18 @@ def add_section_errors(
     errors.append(f"In '{section}':\n{details}")
 
 
-def read_mapping(value: object, key: str, errors: list[str]) -> dict[str, str] | None:
+def normalize_extension(extension: str) -> str:
+    """'.JPG' -> '.jpg', 'csv' -> '.csv'. Raises ValueError if empty."""
+    name = extension.lower().removeprefix(".")
+    if not name:
+        msg = "is not a valid extension"
+        raise ValueError(msg)
+    return f".{name}"
+
+
+def read_mapping(
+    value: object, key: str, errors: list[str], normalize: Callable[[str], str]
+) -> dict[str, str] | None:
     """A mapping of strings to strings (extensions, mimetypes)."""
     if not isinstance(value, dict):
         errors.append(f"'{key}' must be a mapping, got {type(value).__name__}")
@@ -121,15 +133,33 @@ def read_mapping(value: object, key: str, errors: list[str]) -> dict[str, str] |
     # Errors are grouped under the mapping's name, e.g. "In 'extensions':"
     mapping_errors: list[str] = []
     mapping: dict[str, str] = {}
+    origins: dict[str, str] = {}
     for rule, dest in value.items():
         if not isinstance(rule, str):
             mapping_errors.append(
                 f"{rule!r} must be a string, got {type(rule).__name__}"
             )
             continue
+
+        try:
+            normalized_rule = normalize(rule)
+        except ValueError as e:
+            mapping_errors.append(f"'{rule}' {e}")
+            continue
+
         checked_dest = read_dir(dest, rule, mapping_errors)
-        if checked_dest is not None:
-            mapping[rule] = checked_dest
+        if checked_dest is None:
+            continue
+
+        if normalized_rule not in mapping:
+            mapping[normalized_rule] = checked_dest
+            origins[normalized_rule] = rule
+        elif mapping[normalized_rule] != checked_dest:
+            mapping_errors.append(
+                f"'{origins[normalized_rule]}' and '{rule}' "
+                "are the same rule but go to different folders"
+            )
+            continue
 
     if mapping_errors:
         add_section_errors(key, mapping_errors, errors)
@@ -196,11 +226,15 @@ def load_config(config_path: Path) -> Config:
         if hidden is not None:
             config_kwargs["hidden"] = hidden
     if "extensions" in config_to_load:
-        extensions = read_mapping(config_to_load["extensions"], "extensions", errors)
+        extensions = read_mapping(
+            config_to_load["extensions"], "extensions", errors, normalize_extension
+        )
         if extensions is not None:
             config_kwargs["extensions"] = extensions
     if "mimetypes" in config_to_load:
-        mimetypes = read_mapping(config_to_load["mimetypes"], "mimetypes", errors)
+        mimetypes = read_mapping(
+            config_to_load["mimetypes"], "mimetypes", errors, str.lower
+        )
         if mimetypes is not None:
             config_kwargs["mimetypes"] = mimetypes
 
