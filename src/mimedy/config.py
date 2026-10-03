@@ -8,7 +8,7 @@ validates every value before building the dataclasses.
 import logging
 from dataclasses import dataclass, field, fields
 from difflib import get_close_matches
-from pathlib import Path
+from pathlib import Path, PurePath
 
 import yaml
 
@@ -48,11 +48,43 @@ def check_unknown_keys(data: dict, config_class: type, errors: list[str]) -> Non
 
 
 def read_dir(value: object, key: str, errors: list[str]) -> str | None:
-    """A destination folder name: a string, stripped of surrounding spaces."""
+    """A destination folder, relative to the organized folder.
+
+    It must be a non-empty relative path that stays inside the organized
+    folder. Surrounding spaces are stripped and the path is normalized
+    ("./Code//Python/" becomes "Code/Python").
+    """
     if not isinstance(value, str):
         errors.append(f"'{key}' must be a string, got {type(value).__name__}")
         return None
-    return value.strip()
+
+    # PurePath only parses the text: destinations usually don't exist yet,
+    # and validating the config must not depend on the disk
+    path = PurePath(value.strip())
+
+    # "" and "." both have no parts: they would mean the organized folder itself
+    if not path.parts:
+        errors.append(f"'{key}' must not be empty")
+        return None
+
+    # Path("/organized") / "/tmp" gives "/tmp", and ".." climbs out of it:
+    # a destination must never lead outside the organized folder
+    if path.is_absolute():
+        errors.append(f"'{key}' must be a relative folder name, got '{path}'")
+        return None
+    if ".." in path.parts:
+        errors.append(f"'{key}' must stay inside the organized folder, got '{path}'")
+        return None
+
+    # Only the shell expands "~" (and "~user") at the start of a path: here it
+    # would create a folder literally named "~", not use the home directory
+    if path.parts[0].startswith("~"):
+        errors.append(
+            f"'{key}' must stay inside the organized folder "
+            f"('~' is not expanded), got '{path}'"
+        )
+        return None
+    return str(path)
 
 
 def read_threshold(value: object, key: str, errors: list[str]) -> float | None:
