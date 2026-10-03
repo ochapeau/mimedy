@@ -1,3 +1,10 @@
+"""Configuration loading and validation.
+
+Dataclasses do not check types at runtime: building a Config directly from
+unchecked data would accept anything. Always go through load_config(), which
+validates every value before building the dataclasses.
+"""
+
 import logging
 from dataclasses import dataclass, field, fields
 from difflib import get_close_matches
@@ -28,20 +35,103 @@ class Config:
     mimetypes: dict[str, str] = field(default_factory=dict)
 
 
-def check_unknown_keys(
-    data: dict, config_class: type, section: str, errors: list[str]
-) -> None:
+def check_unknown_keys(data: dict, config_class: type, errors: list[str]) -> None:
     """Add an error for each key of data that is not a field of config_class."""
     authorized_keys = {f.name for f in fields(config_class)}
     unknown_keys = data.keys() - authorized_keys
     for key in sorted(unknown_keys):
         close_match = get_close_matches(key, authorized_keys, n=1)
         err_msg = f"Unknown key '{key}'"
-        if section:
-            err_msg += f" in {section}"
         if close_match:
             err_msg += f" (did you mean '{close_match[0]}'?)"
         errors.append(err_msg)
+
+
+def read_dir(value: object, key: str, errors: list[str]) -> str | None:
+    """A destination folder name: a string, stripped of surrounding spaces."""
+    if not isinstance(value, str):
+        errors.append(f"'{key}' must be a string, got {type(value).__name__}")
+        return None
+    return value.strip()
+
+
+def read_threshold(value: object, key: str, errors: list[str]) -> float | None:
+    """A strictly positive number, booleans excluded."""
+    if isinstance(value, bool):
+        errors.append(f"'{key}' must be a number, got bool")
+        return None
+
+    if not isinstance(value, (int, float)):
+        errors.append(f"'{key}' must be a positive number, got {type(value).__name__}")
+        return None
+
+    threshold = float(value)
+    if threshold <= 0:
+        errors.append(f"'{key}' must be a positive number")
+        return None
+    return threshold
+
+
+def add_section_errors(
+    section: str, section_errors: list[str], errors: list[str]
+) -> None:
+    """Add the errors of a config section, grouped under its name."""
+    details = "\n".join(f"    - {error}" for error in section_errors)
+    errors.append(f"In '{section}':\n{details}")
+
+
+def read_mapping(value: object, key: str, errors: list[str]) -> dict[str, str] | None:
+    """A mapping of strings to strings (extensions, mimetypes)."""
+    if not isinstance(value, dict):
+        errors.append(f"'{key}' must be a mapping, got {type(value).__name__}")
+        return None
+
+    # Errors are grouped under the mapping's name, e.g. "In 'extensions':"
+    mapping_errors: list[str] = []
+    mapping: dict[str, str] = {}
+    for rule, dest in value.items():
+        if not isinstance(rule, str):
+            mapping_errors.append(
+                f"{rule!r} must be a string, got {type(rule).__name__}"
+            )
+            continue
+        checked_dest = read_dir(dest, rule, mapping_errors)
+        if checked_dest is not None:
+            mapping[rule] = checked_dest
+
+    if mapping_errors:
+        add_section_errors(key, mapping_errors, errors)
+        return None
+    return mapping
+
+
+def read_large_files(value: object, errors: list[str]) -> LargeFilesConfig | None:
+    """The large_files section: a mapping with threshold_mb and target_dir."""
+    if not isinstance(value, dict):
+        errors.append(f"'large_files' must be a mapping, got {type(value).__name__}")
+        return None
+
+    # Errors are grouped under "In 'large_files':", unknown keys included
+    large_files_errors: list[str] = []
+    check_unknown_keys(value, LargeFilesConfig, large_files_errors)
+
+    kwargs = {}
+    if "threshold_mb" in value:
+        threshold_mb = read_threshold(
+            value["threshold_mb"], "threshold_mb", large_files_errors
+        )
+        if threshold_mb is not None:
+            kwargs["threshold_mb"] = threshold_mb
+    if "target_dir" in value:
+        target_dir = read_dir(value["target_dir"], "target_dir", large_files_errors)
+        if target_dir is not None:
+            kwargs["target_dir"] = target_dir
+
+    if large_files_errors:
+        add_section_errors("large_files", large_files_errors, errors)
+        return None
+
+    return LargeFilesConfig(**kwargs)
 
 
 def load_config(config_path: Path) -> Config:
@@ -65,27 +155,32 @@ def load_config(config_path: Path) -> Config:
 
     # Collect every error before reporting, so they can all be fixed at once
     errors: list[str] = []
-    check_unknown_keys(config_to_load, Config, "", errors)
+    check_unknown_keys(config_to_load, Config, errors)
+
+    # Build the config
+    config_kwargs = {}
+    if "hidden" in config_to_load:
+        hidden = read_dir(config_to_load["hidden"], "hidden", errors)
+        if hidden is not None:
+            config_kwargs["hidden"] = hidden
+    if "extensions" in config_to_load:
+        extensions = read_mapping(config_to_load["extensions"], "extensions", errors)
+        if extensions is not None:
+            config_kwargs["extensions"] = extensions
+    if "mimetypes" in config_to_load:
+        mimetypes = read_mapping(config_to_load["mimetypes"], "mimetypes", errors)
+        if mimetypes is not None:
+            config_kwargs["mimetypes"] = mimetypes
 
     # Get the large files config
     large_files_config = config_to_load.get("large_files", {})
-    if isinstance(large_files_config, dict):
-        check_unknown_keys(large_files_config, LargeFilesConfig, "large_files", errors)
-    else:
-        errors.append("'large_files' must be a mapping")
+    large_files = read_large_files(large_files_config, errors)
 
+    # Errors check
     if errors:
         details = "\n".join(f"  - {error}" for error in errors)
         msg = f"Invalid config in {config_path}:\n{details}"
         raise ConfigError(msg)
 
-    # Build the config
-    kwargs = {}
-    if "hidden" in config_to_load:
-        kwargs["hidden"] = config_to_load["hidden"]
-    if "extensions" in config_to_load:
-        kwargs["extensions"] = config_to_load["extensions"]
-    if "mimetypes" in config_to_load:
-        kwargs["mimetypes"] = config_to_load["mimetypes"]
     logger.info("Loaded config from %s", config_path)
-    return Config(**kwargs, large_files=LargeFilesConfig(**large_files_config))
+    return Config(**config_kwargs, large_files=large_files)
