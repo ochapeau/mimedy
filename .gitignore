@@ -3,6 +3,7 @@ test*/
 
 # Personal config (see config.example.yaml)
 config.yaml
+config.err.yaml
 
 # Python
 __pycache__/
