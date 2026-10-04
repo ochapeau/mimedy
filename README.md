@@ -42,6 +42,7 @@ Move 5 files? [y/N]: y
 ### Fonctionnalités
 
 - 🧠 **Détection par le contenu** : Magika reconnaît plus de 200 types de fichiers, même renommés ou sans extension.
+- 🔒 **100 % local** : le modèle d'IA est livré avec l'outil et tourne sur votre machine. Aucune connexion réseau, aucun fichier ni aucune donnée n'est envoyé où que ce soit.
 - 🪜 **Règles en cascade** : fichiers cachés, fichiers volumineux, extensions, types MIME, puis le groupe Magika en dernier recours.
 - 📋 **Plan puis confirmation** : tous les déplacements sont affichés avant d'être effectués, et rien ne bouge sans votre accord. `--dry-run` s'arrête au plan.
 - 🧯 **Robuste** : un fichier illisible ou verrouillé est signalé et ignoré, sans interrompre le rangement.
@@ -224,6 +225,7 @@ Move 5 files? [y/N]: y
 ### Features
 
 - 🧠 **Content-based detection**: Magika recognizes over 200 file types, even when renamed or missing an extension.
+- 🔒 **100% local**: the AI model ships with the tool and runs on your machine. No network connection, no file or data is ever sent anywhere.
 - 🪜 **Cascading rules**: hidden files, large files, extensions, MIME types, then the Magika group as a fallback.
 - 📋 **Plan, then confirm**: every move is shown before it happens, and nothing moves without your approval. `--dry-run` stops at the plan.
 - 🧯 **Robust**: an unreadable or locked file is reported and skipped, without stopping the run.
