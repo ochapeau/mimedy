@@ -1,6 +1,8 @@
 # 🗂️ mimedy
 
 [![CI](https://github.com/ochapeau/mimedy/actions/workflows/ci.yml/badge.svg)](https://github.com/ochapeau/mimedy/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/mimedy)](https://pypi.org/project/mimedy/)
+[![Python](https://img.shields.io/pypi/pyversions/mimedy)](https://pypi.org/project/mimedy/)
 
 **Range un dossier en désordre selon le vrai type de chaque fichier, pas selon son extension.**\
 **Tidies up a messy folder by each file's real type, not by its extension.**
@@ -49,12 +51,16 @@ Move 5 files? [y/N]: y
 
 ### Installation
 
-Prérequis : Python 3.10+ et [uv](https://docs.astral.sh/uv/).
+mimedy est publié sur [PyPI](https://pypi.org/project/mimedy/) et nécessite Python 3.10+. Le plus simple est de l'installer comme outil isolé avec [uv](https://docs.astral.sh/uv/) ou [pipx](https://pipx.pypa.io/) :
 
 ```bash
-git clone https://github.com/ochapeau/mimedy.git
-cd mimedy
-uv sync
+uv tool install mimedy     # ou : pipx install mimedy
+```
+
+Pour l'essayer sans rien installer :
+
+```bash
+uvx mimedy ~/Downloads --dry-run
 ```
 
 ### Utilisation
@@ -63,16 +69,16 @@ uv sync
 
 ```bash
 # Afficher le plan, puis confirmer
-uv run mimedy ~/Downloads
+mimedy ~/Downloads
 
 # Afficher le plan seulement
-uv run mimedy ~/Downloads --dry-run
+mimedy ~/Downloads --dry-run
 
 # Sans confirmation, par exemple dans un script
-uv run mimedy ~/Downloads --yes --config my-config.yaml
+mimedy ~/Downloads --yes --config my-config.yaml
 
 # Comprendre pourquoi un fichier va à tel endroit
-uv run mimedy ~/Downloads --dry-run --verbose
+mimedy ~/Downloads --dry-run --verbose
 ```
 
 | Option | Description |
@@ -165,8 +171,12 @@ mimedy/
 Le code est vérifié par [Ruff](https://docs.astral.sh/ruff/) (lint et formatage) à chaque commit, et testé avec [pytest](https://docs.pytest.org/). L'intégration continue lance les deux à chaque push, sur Python 3.10 à 3.13.
 
 ```bash
+git clone https://github.com/ochapeau/mimedy.git
+cd mimedy
+uv sync                     # crée l'environnement de développement
 uv run pre-commit install   # vérifications automatiques à chaque commit
 uv run pytest               # lancer les tests
+uv run mimedy --help        # lancer la version en cours de développement
 ```
 
 ### Feuille de route
@@ -174,7 +184,9 @@ uv run pytest               # lancer les tests
 - [x] Configuration typée et validée
 - [x] Configuration globale dans `~/.config/mimedy/`
 - [x] Tests automatisés et intégration continue
-- [ ] Publication sur PyPI (`uv tool install mimedy`)
+- [x] Publication sur PyPI (`uv tool install mimedy`)
+- [ ] Annuler le dernier rangement (`--undo`)
+- [ ] Motifs de fichiers à ignorer (téléchargements en cours : `*.part`, `*.crdownload`…)
 - [ ] Interface en terminal (TUI), en option
 
 ### Licence
@@ -220,12 +232,16 @@ Move 5 files? [y/N]: y
 
 ### Installation
 
-Requirements: Python 3.10+ and [uv](https://docs.astral.sh/uv/).
+mimedy is published on [PyPI](https://pypi.org/project/mimedy/) and requires Python 3.10+. The easiest way is to install it as an isolated tool with [uv](https://docs.astral.sh/uv/) or [pipx](https://pipx.pypa.io/):
 
 ```bash
-git clone https://github.com/ochapeau/mimedy.git
-cd mimedy
-uv sync
+uv tool install mimedy     # or: pipx install mimedy
+```
+
+To try it without installing anything:
+
+```bash
+uvx mimedy ~/Downloads --dry-run
 ```
 
 ### Usage
@@ -234,16 +250,16 @@ uv sync
 
 ```bash
 # Show the plan, then confirm
-uv run mimedy ~/Downloads
+mimedy ~/Downloads
 
 # Only show the plan
-uv run mimedy ~/Downloads --dry-run
+mimedy ~/Downloads --dry-run
 
 # No confirmation, e.g. in a script
-uv run mimedy ~/Downloads --yes --config my-config.yaml
+mimedy ~/Downloads --yes --config my-config.yaml
 
 # Understand why a file goes where it goes
-uv run mimedy ~/Downloads --dry-run --verbose
+mimedy ~/Downloads --dry-run --verbose
 ```
 
 | Option | Description |
@@ -336,8 +352,12 @@ mimedy/
 Code is checked by [Ruff](https://docs.astral.sh/ruff/) (linting and formatting) on every commit, and tested with [pytest](https://docs.pytest.org/). Continuous integration runs both on every push, on Python 3.10 to 3.13.
 
 ```bash
+git clone https://github.com/ochapeau/mimedy.git
+cd mimedy
+uv sync                     # create the development environment
 uv run pre-commit install   # automatic checks on every commit
 uv run pytest               # run the tests
+uv run mimedy --help        # run the development version
 ```
 
 ### Roadmap
@@ -345,7 +365,9 @@ uv run pytest               # run the tests
 - [x] Typed, validated configuration
 - [x] Global configuration in `~/.config/mimedy/`
 - [x] Automated tests and continuous integration
-- [ ] Publish on PyPI (`uv tool install mimedy`)
+- [x] Publish on PyPI (`uv tool install mimedy`)
+- [ ] Undo the last run (`--undo`)
+- [ ] File patterns to ignore (downloads in progress: `*.part`, `*.crdownload`…)
 - [ ] Optional terminal interface (TUI)
 
 ### License
