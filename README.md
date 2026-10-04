@@ -1,5 +1,7 @@
 # mimedy
 
+[![CI](https://github.com/ochapeau/mimedy/actions/workflows/ci.yml/badge.svg)](https://github.com/ochapeau/mimedy/actions/workflows/ci.yml)
+
 **Range un dossier en désordre selon le vrai type de chaque fichier, pas selon son extension.**
 **Tidies up a messy folder by each file's real type, not by its extension.**
 
