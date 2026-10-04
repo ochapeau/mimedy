@@ -18,7 +18,7 @@ from mimedy.errors import ConfigError
 logger = logging.getLogger("mimedy.config")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class LargeFilesConfig:
     """Where files bigger than threshold_mb (decimal MB) are moved."""
 
@@ -26,7 +26,7 @@ class LargeFilesConfig:
     target_dir: str = "Large"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class Config:
     """The validated configuration, as returned by load_config().
 
