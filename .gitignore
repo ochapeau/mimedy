@@ -1,10 +1,5 @@
-# Local test data
-test*/
-
 # Personal config (see config.example.yaml)
 config.yaml
-config.err.yaml
-config.tmp.yaml
 
 # Python
 __pycache__/

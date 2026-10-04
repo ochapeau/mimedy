@@ -22,8 +22,12 @@ build-backend = "hatchling.build"
 [dependency-groups]
 dev = [
     "pre-commit>=4.6.2",
+    "pytest>=9.1.1",
     "ruff>=0.16.9",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 88
@@ -54,3 +58,7 @@ select = [
     "PL",    # pylint
     "RUF",   # ruff-specific rules
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests use plain assert and literal expected values
+"tests/**" = ["S101", "PLR2004"]
