@@ -3,6 +3,7 @@
 import re
 import sys
 from collections.abc import Callable
+from importlib.resources import files
 from pathlib import Path
 
 import pytest
@@ -262,3 +263,15 @@ def test_default_config_is_loaded_when_present(
     path.parent.mkdir(parents=True)
     path.write_text("extensions:\n  .csv: Data\n")
     assert load_config() == Config(extensions={".csv": "Data"})
+
+
+# --- Shipped example ------------------------------------------------------------
+
+
+def test_shipped_example_config_is_valid() -> None:
+    # --init-config copies this file: it must always load without errors
+    example = Path(str(files("mimedy") / "config.example.yaml"))
+
+    config = load_config(example)
+
+    assert config != Config()  # the example really sets rules

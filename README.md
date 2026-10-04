@@ -85,6 +85,7 @@ uv run mimedy ~/Downloads --dry-run --verbose
 | `--lowercase`, `-l` | Garde en minuscules les dossiers nommés d'après Magika (`video/` au lieu de `Video/`). |
 | `--version`, `-V` | Affiche la version. |
 | `--help`, `-h` | Affiche l'aide. |
+| `--init-config` | Crée une configuration d'exemple commentée à l'emplacement par défaut (sans jamais écraser une configuration existante). |
 | `--install-completion` | Active l'autocomplétion des options avec Tab dans votre shell (une seule fois suffit). |
 
 Seuls les fichiers situés directement dans le dossier sont traités. Les sous-dossiers existants ne sont pas touchés, ce qui permet de relancer l'outil sans risque.
@@ -106,11 +107,11 @@ Sans `--config`, mimedy lit le fichier de configuration personnel, s'il existe :
 
 S'il n'existe pas, les valeurs par défaut sont utilisées. Un fichier passé avec `--config` doit en revanche exister. `mimedy --help` affiche l'emplacement exact sur votre machine.
 
-Pour démarrer, copiez l'exemple fourni et adaptez-le :
+Pour démarrer, créez une configuration d'exemple commentée, puis adaptez-la :
 
 ```bash
-mkdir -p ~/.config/mimedy
-cp config.example.yaml ~/.config/mimedy/config.yaml
+mimedy --init-config
+# Created config file: /Users/me/.config/mimedy/config.yaml
 ```
 
 ```yaml
@@ -129,7 +130,7 @@ mimetypes:                  # type MIME détecté par Magika
   image/jpeg: "Photos"
 ```
 
-Toutes les clés sont facultatives : celles qui manquent reprennent leur valeur par défaut. Les destinations peuvent contenir des sous-dossiers (`"Code/Python"`). [`config.example.yaml`](config.example.yaml) contient un exemple complet et commenté.
+Toutes les clés sont facultatives : celles qui manquent reprennent leur valeur par défaut. Les destinations peuvent contenir des sous-dossiers (`"Code/Python"`). [`config.example.yaml`](src/mimedy/config.example.yaml), le fichier copié par `--init-config`, contient un exemple complet et commenté.
 
 ### Comment un fichier est-il classé ?
 
@@ -149,14 +150,14 @@ Les règles 1 à 3 ne lisent pas le contenu des fichiers : elles sont instantan�
 
 ```text
 mimedy/
-├── config.example.yaml   # Configuration d'exemple commentée
 ├── pyproject.toml
-└── src/mimedy/
-    ├── main.py           # Point d'entrée de la CLI (Typer)
-    ├── config.py         # Chargement et validation de la configuration
-    ├── organizer.py      # Règles de classement, planification et déplacements
-    └── errors.py         # Exceptions du projet
-tests/                    # Tests pytest (configuration, règles, plan, CLI)
+├── src/mimedy/
+│   ├── main.py              # Point d'entrée de la CLI (Typer)
+│   ├── config.py            # Chargement et validation de la configuration
+│   ├── config.example.yaml  # Configuration d'exemple commentée
+│   ├── organizer.py         # Règles de classement, planification et déplacements
+│   └── errors.py            # Exceptions du projet
+└── tests/                   # Tests pytest (configuration, règles, plan, CLI)
 ```
 
 ### Développement
@@ -255,6 +256,7 @@ uv run mimedy ~/Downloads --dry-run --verbose
 | `--lowercase`, `-l` | Keep folders named after Magika groups lowercase (`video/` instead of `Video/`). |
 | `--version`, `-V` | Show the version. |
 | `--help`, `-h` | Show the help. |
+| `--init-config` | Create a commented example config at the default location (never overwrites an existing one). |
 | `--install-completion` | Enable Tab completion of the options in your shell (once is enough). |
 
 Only files directly inside the folder are processed. Existing subfolders are left untouched, so the tool can safely be run again.
@@ -276,11 +278,11 @@ Without `--config`, mimedy reads your personal configuration file, if it exists:
 
 If it doesn't exist, the defaults are used. A file passed with `--config`, however, must exist. `mimedy --help` shows the exact location on your machine.
 
-To get started, copy the provided example and adapt it:
+To get started, create a commented example config, then adapt it:
 
 ```bash
-mkdir -p ~/.config/mimedy
-cp config.example.yaml ~/.config/mimedy/config.yaml
+mimedy --init-config
+# Created config file: /Users/me/.config/mimedy/config.yaml
 ```
 
 ```yaml
@@ -299,7 +301,7 @@ mimetypes:                  # MIME type detected by Magika
   image/jpeg: "Photos"
 ```
 
-Every key is optional: missing ones fall back to their default value. Destinations may include subfolders (`"Code/Python"`). See [`config.example.yaml`](config.example.yaml) for a complete, commented example.
+Every key is optional: missing ones fall back to their default value. Destinations may include subfolders (`"Code/Python"`). See [`config.example.yaml`](src/mimedy/config.example.yaml), the file copied by `--init-config`, for a complete, commented example.
 
 ### How is a file classified?
 
@@ -319,14 +321,14 @@ Rules 1 to 3 don't read file contents, so they are instant. Magika only runs whe
 
 ```text
 mimedy/
-├── config.example.yaml   # Commented example configuration
 ├── pyproject.toml
-└── src/mimedy/
-    ├── main.py           # CLI entry point (Typer)
-    ├── config.py         # Configuration loading and validation
-    ├── organizer.py      # Classification rules, planning and moves
-    └── errors.py         # Project exceptions
-tests/                    # pytest tests (configuration, rules, plan, CLI)
+├── src/mimedy/
+│   ├── main.py              # CLI entry point (Typer)
+│   ├── config.py            # Configuration loading and validation
+│   ├── config.example.yaml  # Commented example configuration
+│   ├── organizer.py         # Classification rules, planning and moves
+│   └── errors.py            # Project exceptions
+└── tests/                   # pytest tests (configuration, rules, plan, CLI)
 ```
 
 ### Development

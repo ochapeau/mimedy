@@ -2,6 +2,7 @@
 
 import logging
 from importlib.metadata import version
+from importlib.resources import files
 from pathlib import Path
 from typing import Annotated
 
@@ -42,7 +43,29 @@ def show_version(value: bool) -> None:
     """Print the version and exit, before any other argument is checked."""
     if value:
         typer.echo(f"mimedy {version('mimedy')}")
-        raise typer.Exit
+        raise typer.Exit(EXIT_OK)
+
+
+def init_config(value: bool) -> None:
+    """Copy the example config to the default location, then exit.
+
+    An existing config is never overwritten.
+    """
+    if not value:
+        return
+
+    target_config_path = default_config_path()
+
+    if target_config_path.exists():
+        typer.echo(f"Config file already exists: {target_config_path}", err=True)
+        raise typer.Exit(EXIT_FAILURES)
+
+    # Create the folder that holds the file (~/.config/mimedy), not the file itself
+    target_config_path.parent.mkdir(parents=True, exist_ok=True)
+    target_config_path.write_text((files("mimedy") / "config.example.yaml").read_text())
+
+    typer.echo(f"Created config file: {target_config_path}")
+    raise typer.Exit(EXIT_OK)
 
 
 @app.command()
@@ -87,6 +110,15 @@ def main(  # noqa: PLR0913, PLR0917 (one parameter per CLI option)
             callback=show_version,
             is_eager=True,
             help="Show the version and exit.",
+        ),
+    ] = False,
+    init_config_flag: Annotated[
+        bool,
+        typer.Option(
+            "--init-config",
+            callback=init_config,
+            is_eager=True,
+            help="Create a commented example config at the default location.",
         ),
     ] = False,
 ) -> None:

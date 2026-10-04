@@ -2,11 +2,13 @@
 
 from collections.abc import Callable
 from importlib.metadata import version
+from importlib.resources import files
 from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
 
+from mimedy.config import default_config_path
 from mimedy.main import app
 
 runner = CliRunner()
@@ -196,5 +198,32 @@ def test_missing_config_option_file_exits_with_2(
 @pytest.mark.parametrize("option", ["--version", "-V"])
 def test_version_is_shown_without_directory(option: str) -> None:
     result = runner.invoke(app, [option])
-    assert result.exit_code == 0
+
+    assert result.exit_code == 0  # Success
     assert result.output == f"mimedy {version('mimedy')}\n"
+
+
+# --- Config initialization ------------------------------------------------------
+
+
+def test_init_config_creates_the_example_at_the_default_location() -> None:
+    result = runner.invoke(app, ["--init-config"])
+
+    assert result.exit_code == 0  # Success
+    assert (
+        default_config_path().read_text()
+        == (files("mimedy") / "config.example.yaml").read_text()
+    )
+
+
+def test_init_config_never_overwrites_an_existing_config() -> None:
+    # Write a config file at default_config_path()
+    path = default_config_path()
+    content = "extensions:\n  .csv: Data\n"
+    path.parent.mkdir(parents=True)
+    path.write_text(content)
+
+    result = runner.invoke(app, ["--init-config"])
+
+    assert result.exit_code == 1  # Aborted
+    assert default_config_path().read_text() == content
