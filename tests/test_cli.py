@@ -1,6 +1,7 @@
 """End-to-end tests of the mimedy command, with the real Magika model."""
 
 from collections.abc import Callable
+from importlib.metadata import version
 from pathlib import Path
 
 import pytest
@@ -187,3 +188,13 @@ def test_missing_config_option_file_exits_with_2(
 
     assert result.exit_code == 2  # Usage error
     assert "Config file not found" in result.output
+
+
+# --- Version --------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("option", ["--version", "-V"])
+def test_version_is_shown_without_directory(option: str) -> None:
+    result = runner.invoke(app, [option])
+    assert result.exit_code == 0
+    assert result.output == f"mimedy {version('mimedy')}\n"

@@ -1,6 +1,7 @@
 """Command-line interface of mimedy."""
 
 import logging
+from importlib.metadata import version
 from pathlib import Path
 from typing import Annotated
 
@@ -18,7 +19,11 @@ EXIT_FAILURES = 1  # the run completed, but at least one file failed
 
 logger = logging.getLogger("mimedy.main")
 
-app = typer.Typer(no_args_is_help=True, add_completion=False)
+app = typer.Typer(
+    no_args_is_help=True,
+    add_completion=True,
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
 
 
 def init_logging(*, verbose: bool = False) -> None:
@@ -31,6 +36,13 @@ def init_logging(*, verbose: bool = False) -> None:
 
     # Only our own loggers go down to DEBUG, not third-party libraries
     logging.getLogger("mimedy").setLevel(logging.DEBUG if verbose else logging.INFO)
+
+
+def show_version(value: bool) -> None:
+    """Print the version and exit, before any other argument is checked."""
+    if value:
+        typer.echo(f"mimedy {version('mimedy')}")
+        raise typer.Exit
 
 
 @app.command()
@@ -49,21 +61,33 @@ def main(  # noqa: PLR0913, PLR0917 (one parameter per CLI option)
         Path | None,
         typer.Option(
             "--config",
+            "-c",
             help=f"YAML configuration file (default: {default_config_path()}).",
         ),
     ] = None,
     dry_run: Annotated[
-        bool, typer.Option("--dry-run", help="Show planned moves without moving.")
+        bool, typer.Option("--dry-run", "-n", help="Show planned moves without moving.")
     ] = False,
     yes: Annotated[
         bool, typer.Option("--yes", "-y", help="Move without asking for confirmation.")
     ] = False,
     lowercase: Annotated[
-        bool, typer.Option("--lowercase", help="Keep Magika folder names lowercase.")
+        bool,
+        typer.Option("--lowercase", "-l", help="Keep Magika folder names lowercase."),
     ] = False,
     verbose: Annotated[
         bool,
         typer.Option("--verbose", "-v", help="Show the rule applied to each file."),
+    ] = False,
+    show_version_flag: Annotated[
+        bool,
+        typer.Option(
+            "--version",
+            "-V",
+            callback=show_version,
+            is_eager=True,
+            help="Show the version and exit.",
+        ),
     ] = False,
 ) -> None:
     """Organize a folder by real file type, detected from content with Magika."""

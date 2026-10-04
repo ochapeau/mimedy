@@ -78,11 +78,14 @@ uv run mimedy ~/Downloads --dry-run --verbose
 | Option | Description |
 | :--- | :--- |
 | `DIRECTORY` | Dossier à ranger *(obligatoire)*. |
-| `--config PATH` | Fichier de configuration YAML *(par défaut : voir [Configuration](#configuration))*. |
-| `--dry-run` | Affiche les déplacements prévus sans les effectuer. |
+| `--config`, `-c PATH` | Fichier de configuration YAML *(par défaut : voir [Configuration](#configuration))*. |
+| `--dry-run`, `-n` | Affiche les déplacements prévus sans les effectuer. |
 | `--yes`, `-y` | Déplace sans demander de confirmation. |
 | `--verbose`, `-v` | Affiche la règle appliquée à chaque fichier. |
-| `--lowercase` | Garde en minuscules les dossiers nommés d'après Magika (`video/` au lieu de `Video/`). |
+| `--lowercase`, `-l` | Garde en minuscules les dossiers nommés d'après Magika (`video/` au lieu de `Video/`). |
+| `--version`, `-V` | Affiche la version. |
+| `--help`, `-h` | Affiche l'aide. |
+| `--install-completion` | Active l'autocomplétion des options avec Tab dans votre shell (une seule fois suffit). |
 
 Seuls les fichiers situés directement dans le dossier sont traités. Les sous-dossiers existants ne sont pas touchés, ce qui permet de relancer l'outil sans risque.
 
@@ -245,11 +248,14 @@ uv run mimedy ~/Downloads --dry-run --verbose
 | Option | Description |
 | :--- | :--- |
 | `DIRECTORY` | Folder to organize *(required)*. |
-| `--config PATH` | YAML configuration file *(default: see [Configuration](#configuration-1))*. |
-| `--dry-run` | Show planned moves without performing them. |
+| `--config`, `-c PATH` | YAML configuration file *(default: see [Configuration](#configuration-1))*. |
+| `--dry-run`, `-n` | Show planned moves without performing them. |
 | `--yes`, `-y` | Move without asking for confirmation. |
 | `--verbose`, `-v` | Show which rule applied to each file. |
-| `--lowercase` | Keep folders named after Magika groups lowercase (`video/` instead of `Video/`). |
+| `--lowercase`, `-l` | Keep folders named after Magika groups lowercase (`video/` instead of `Video/`). |
+| `--version`, `-V` | Show the version. |
+| `--help`, `-h` | Show the help. |
+| `--install-completion` | Enable Tab completion of the options in your shell (once is enough). |
 
 Only files directly inside the folder are processed. Existing subfolders are left untouched, so the tool can safely be run again.
 
