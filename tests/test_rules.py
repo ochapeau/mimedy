@@ -2,7 +2,6 @@
 
 import re
 from collections.abc import Callable
-from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
@@ -10,54 +9,7 @@ import pytest
 from mimedy.config import Config, LargeFilesConfig
 from mimedy.errors import ClassificationError
 from mimedy.organizer import determine_target_directory
-
-# --- Fake Magika ----------------------------------------------------------------
-# The real model is slow to load and its answers depend on its version: the
-# rules are tested against a fake that returns exactly what each test asks for.
-
-
-@dataclass(frozen=True)
-class FakeOutput:
-    mime_type: str
-    group: str
-
-
-@dataclass(frozen=True)
-class FakeResult:
-    ok: bool
-    status: str
-    output: FakeOutput
-
-
-@dataclass
-class FakeMagika:
-    """Answer every identify_path() call with the same detection."""
-
-    mime_type: str = "application/octet-stream"
-    group: str = "unknown"
-    ok: bool = True
-    status: str = "ok"
-    calls: list[Path] = field(default_factory=list)
-
-    def identify_path(self, path: Path) -> FakeResult:
-        self.calls.append(path)
-        return FakeResult(self.ok, self.status, FakeOutput(self.mime_type, self.group))
-
-
-# --- Fixtures -------------------------------------------------------------------
-
-
-@pytest.fixture
-def make_file(tmp_path: Path) -> Callable[..., Path]:
-    """Return a function that creates a file of a given name and size."""
-
-    def make(name: str, size: int = 10) -> Path:
-        path = tmp_path / name
-        path.write_bytes(b"x" * size)
-        return path
-
-    return make
-
+from tests.fakes import FakeMagika
 
 # --- Hidden files ---------------------------------------------------------------
 
