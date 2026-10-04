@@ -129,7 +129,7 @@ def test_uppercase_extension_matches_the_rule(make_file: Callable[..., Path]) ->
 
 
 def test_detected_mimetype_goes_to_its_folder(make_file: Callable[..., Path]) -> None:
-    file = make_file("document")
+    file = make_file("invoice")
     magika = FakeMagika(mime_type="application/pdf", group="document")
     config = Config(mimetypes={"application/pdf": "PDF"})
 
