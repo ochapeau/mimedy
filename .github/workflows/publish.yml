@@ -1,0 +1,25 @@
+name: Publish
+
+# Runs when a release is published on GitHub (e.g. tag v1.0.0)
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/mimedy
+    permissions:
+      # Lets PyPI verify this workflow's identity: no password or token needed
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+      # Never publish a version that fails its own tests
+      - run: uv run --locked pytest
+      - run: uv build
+      - run: uv publish --trusted-publishing always

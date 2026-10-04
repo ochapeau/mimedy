@@ -1,16 +1,37 @@
 [project]
 name = "mimedy"
-version = "0.1.0"
+version = "1.0.0"
 description = "Organize messy folders by real file type, detected from content with Google Magika"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 authors = [{ name = "Olivier Chapeau" }]
+keywords = ["magika", "mime", "mimetype", "organizer", "files", "downloads", "cli"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Filesystems",
+    "Topic :: Utilities",
+]
 dependencies = [
     "magika>=0.6.2",
     "pyyaml>=6.0.2",
     "typer>=0.16",
 ]
+
+[project.urls]
+Homepage = "https://github.com/ochapeau/mimedy"
+Repository = "https://github.com/ochapeau/mimedy"
+Issues = "https://github.com/ochapeau/mimedy/issues"
+Releases = "https://github.com/ochapeau/mimedy/releases"
 
 [project.scripts]
 mimedy = "mimedy.main:app"
