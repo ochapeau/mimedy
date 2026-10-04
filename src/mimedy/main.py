@@ -7,7 +7,7 @@ from typing import Annotated
 import typer
 from magika import Magika
 
-from mimedy.config import load_config
+from mimedy.config import default_config_path, load_config
 from mimedy.errors import ConfigError
 from mimedy.organizer import execute, log_plan, plan_moves
 
@@ -46,8 +46,12 @@ def main(  # noqa: PLR0913, PLR0917 (one parameter per CLI option)
         ),
     ],
     config_path: Annotated[
-        Path, typer.Option("--config", help="YAML configuration file.")
-    ] = Path("config.yaml"),
+        Path | None,
+        typer.Option(
+            "--config",
+            help=f"YAML configuration file (default: {default_config_path()}).",
+        ),
+    ] = None,
     dry_run: Annotated[
         bool, typer.Option("--dry-run", help="Show planned moves without moving.")
     ] = False,

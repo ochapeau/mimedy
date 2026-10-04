@@ -6,6 +6,8 @@ validates every value before building the dataclasses.
 """
 
 import logging
+import os
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field, fields
 from difflib import get_close_matches
@@ -45,6 +47,17 @@ class Config:
     large_files: LargeFilesConfig = field(default_factory=LargeFilesConfig)
     extensions: dict[str, str] = field(default_factory=dict)
     mimetypes: dict[str, str] = field(default_factory=dict)
+
+
+def default_config_path() -> Path:
+    """Return the per-user config file: XDG on Linux and macOS, APPDATA on Windows."""
+    if sys.platform == "win32":
+        base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+    else:
+        xdg = os.environ.get("XDG_CONFIG_HOME", "")
+        # The XDG spec says to ignore an empty or relative value
+        base = Path(xdg) if xdg and Path(xdg).is_absolute() else Path.home() / ".config"
+    return base / "mimedy" / "config.yaml"
 
 
 def check_unknown_keys(data: dict, config_class: type, errors: list[str]) -> None:
@@ -219,18 +232,18 @@ def read_large_files(value: object, errors: list[str]) -> LargeFilesConfig | Non
     return LargeFilesConfig(**kwargs)
 
 
-def load_config(config_path: Path) -> Config:
-    """Load and validate the YAML configuration file.
+def read_yaml(config_path: Path) -> dict:
+    """Read a YAML config file as a mapping of settings.
 
-    A missing file gives the default configuration. Any invalid content
-    raises a ConfigError listing every problem found.
+    Raise ConfigError if the file is missing, unreadable, not valid YAML, or
+    not a mapping.
     """
     try:
         with config_path.open() as f:
-            config_to_load = yaml.safe_load(f) or {}
-    except FileNotFoundError:
-        logger.warning("Config file not found: %s, using defaults", config_path)
-        return Config()
+            data = yaml.safe_load(f) or {}
+    except FileNotFoundError as e:
+        msg = f"Config file not found: {config_path}"
+        raise ConfigError(msg) from e
     except OSError as e:
         msg = f"Cannot read {config_path}: {e.strerror}"
         raise ConfigError(msg) from e
@@ -238,9 +251,28 @@ def load_config(config_path: Path) -> Config:
         msg = f"Invalid YAML in {config_path}: {e}"
         raise ConfigError(msg) from e
 
-    if not isinstance(config_to_load, dict):
+    if not isinstance(data, dict):
         msg = f"Invalid config in {config_path}: expected a mapping of settings"
         raise ConfigError(msg)
+    return data
+
+
+def load_config(config_path: Path | None = None) -> Config:
+    """Load and validate the configuration.
+
+    config_path is the file given with --config: it must exist. Without it,
+    the per-user file from default_config_path() is used when it exists, and
+    the default configuration otherwise.
+
+    Raise ConfigError listing every problem found in an invalid file.
+    """
+    if config_path is None:
+        config_path = default_config_path()
+        if not config_path.exists():
+            logger.debug("No config file at %s, using defaults", config_path)
+            return Config()
+
+    config_to_load = read_yaml(config_path)
 
     # Collect every error before reporting, so they can all be fixed at once
     errors: list[str] = []

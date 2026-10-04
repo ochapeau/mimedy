@@ -154,3 +154,36 @@ def test_unreadable_file_exits_with_1(
 
     assert result.exit_code == 1  # At least one file move failed
     assert any("Skipped 'document'" in message for message in caplog.messages)
+
+
+# --- Config file location -------------------------------------------------------
+
+
+def test_config_is_read_from_default_location_without_option(
+    downloads: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # Writing default location config file
+    xdg_path = tmp_path / "xdg-config"
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg_path))
+    path = xdg_path / "mimedy/config.yaml"
+    path.parent.mkdir(parents=True)
+    path.write_text("extensions:\n  .csv: Data\n")
+
+    # Testing the command
+    (downloads / "data.csv").write_text("a,b\n1,2\n")
+
+    result = runner.invoke(app, [str(downloads), "--yes"])
+
+    assert result.exit_code == 0  # Success
+    assert "Move" not in result.output
+    assert files_in(downloads) == ["Data", "Data/data.csv"]
+
+
+def test_missing_config_option_file_exits_with_2(
+    downloads: Path, tmp_path: Path
+) -> None:
+    config = tmp_path / "nope.yaml"
+    result = runner.invoke(app, [str(downloads), "--config", str(config), "--yes"])
+
+    assert result.exit_code == 2  # Usage error
+    assert "Config file not found" in result.output

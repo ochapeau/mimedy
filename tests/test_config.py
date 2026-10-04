@@ -1,21 +1,16 @@
 """Tests for loading and validating the configuration file."""
 
 import re
+import sys
 from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 
-from mimedy.config import Config, load_config
+from mimedy.config import Config, default_config_path, load_config
 from mimedy.errors import ConfigError
 
 # --- Loading -------------------------------------------------------------------
-
-
-def test_missing_file_gives_defaults(tmp_path: Path) -> None:
-    config = load_config(tmp_path / "does-not-exist.yaml")
-
-    assert config == Config()
 
 
 def test_valid_config_is_loaded(write_config: Callable[[str], Path]) -> None:
@@ -207,3 +202,63 @@ def test_all_errors_are_reported_at_once(write_config: Callable[[str], Path]) ->
         "    - 'threshold_mb' must be a positive number",
         "    - 'target_dir' must be a string, got int",
     ]
+
+
+# --- Config file location -------------------------------------------------------
+# monkeypatch changes environment variables (setenv, delenv) or attributes
+# (setattr) for one test only, and restores them afterwards.
+
+
+def test_default_config_path_uses_xdg_config_home(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    xdg_path = tmp_path / "xdg-config"
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg_path))
+    assert default_config_path() == xdg_path / "mimedy/config.yaml"
+
+
+def test_default_config_path_ignores_relative_xdg_config_home(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    xdg_path = "xdg-config"
+    monkeypatch.setenv("XDG_CONFIG_HOME", xdg_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    assert default_config_path() == tmp_path / ".config/mimedy/config.yaml"
+
+
+def test_default_config_path_falls_back_to_home_config(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv("XDG_CONFIG_HOME")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    assert default_config_path() == tmp_path / ".config/mimedy/config.yaml"
+
+
+def test_default_config_path_uses_appdata_on_windows(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    win_path = tmp_path / "win-config"
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setenv("APPDATA", str(win_path))
+    assert default_config_path() == win_path / "mimedy/config.yaml"
+
+
+def test_missing_explicit_config_is_an_error(tmp_path: Path) -> None:
+    path = tmp_path / "config.yaml"
+    with pytest.raises(ConfigError, match="Config file not found"):
+        load_config(path)
+
+
+def test_missing_default_config_gives_defaults() -> None:
+    assert load_config() == Config()
+
+
+def test_default_config_is_loaded_when_present(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    xdg_path = tmp_path / "xdg-config"
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg_path))
+    path = xdg_path / "mimedy/config.yaml"
+    path.parent.mkdir(parents=True)
+    path.write_text("extensions:\n  .csv: Data\n")
+    assert load_config() == Config(extensions={".csv": "Data"})

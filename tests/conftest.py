@@ -32,3 +32,12 @@ def write_config(tmp_path: Path) -> Callable[..., Path]:
         return path
 
     return write
+
+
+@pytest.fixture(autouse=True)
+def isolate_user_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Never read the developer's real ~/.config/mimedy/config.yaml in tests.
+
+    autouse=True applies this fixture to every test without asking for it.
+    """
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg-config"))

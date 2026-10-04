@@ -1,9 +1,12 @@
-# mimedy
+# 🗂️ mimedy
 
 [![CI](https://github.com/ochapeau/mimedy/actions/workflows/ci.yml/badge.svg)](https://github.com/ochapeau/mimedy/actions/workflows/ci.yml)
 
-**Range un dossier en désordre selon le vrai type de chaque fichier, pas selon son extension.**
+**Range un dossier en désordre selon le vrai type de chaque fichier, pas selon son extension.**\
 **Tidies up a messy folder by each file's real type, not by its extension.**
+
+*mimedy = **MIME** + **tidy** (ranger) : le type MIME de chaque fichier décide de sa place.*\
+*mimedy = **MIME** + **tidy**: each file's MIME type decides where it belongs.*
 
 [Français](#français) · [English](#english)
 
@@ -20,8 +23,8 @@ Un dossier `Téléchargements` finit toujours par ressembler à ça : des PDF, d
 La plupart des outils de rangement se fient à l'extension. Or une extension peut mentir, manquer ou être fausse. **mimedy** utilise [Magika](https://github.com/google/magika), le modèle de deep learning de Google qui identifie un fichier **à partir de son contenu**, pour décider où il doit aller.
 
 ```text
-$ mimedy ~/Downloads --config config.example.yaml
-[INFO] Loaded config from config.example.yaml
+$ mimedy ~/Downloads
+[INFO] Loaded config from /Users/me/.config/mimedy/config.yaml
 [INFO] Organizing /Users/me/Downloads
 [INFO] 'export.csv' → Data/
 [INFO] 'holidays.jpg' → Photos/
@@ -75,7 +78,7 @@ uv run mimedy ~/Downloads --dry-run --verbose
 | Option | Description |
 | :--- | :--- |
 | `DIRECTORY` | Dossier à ranger *(obligatoire)*. |
-| `--config PATH` | Fichier de configuration YAML *(par défaut : `config.yaml` dans le dossier courant)*. |
+| `--config PATH` | Fichier de configuration YAML *(par défaut : voir [Configuration](#configuration))*. |
 | `--dry-run` | Affiche les déplacements prévus sans les effectuer. |
 | `--yes`, `-y` | Déplace sans demander de confirmation. |
 | `--verbose`, `-v` | Affiche la règle appliquée à chaque fichier. |
@@ -91,10 +94,20 @@ Seuls les fichiers situés directement dans le dossier sont traités. Les sous-d
 
 ### Configuration
 
-Copiez l'exemple fourni et adaptez-le :
+Sans `--config`, mimedy lit le fichier de configuration personnel, s'il existe :
+
+| Système | Emplacement |
+|---|---|
+| Linux, macOS | `~/.config/mimedy/config.yaml` (ou `$XDG_CONFIG_HOME/mimedy/config.yaml`) |
+| Windows | `%APPDATA%\mimedy\config.yaml` |
+
+S'il n'existe pas, les valeurs par défaut sont utilisées. Un fichier passé avec `--config` doit en revanche exister. `mimedy --help` affiche l'emplacement exact sur votre machine.
+
+Pour démarrer, copiez l'exemple fourni et adaptez-le :
 
 ```bash
-cp config.example.yaml config.yaml
+mkdir -p ~/.config/mimedy
+cp config.example.yaml ~/.config/mimedy/config.yaml
 ```
 
 ```yaml
@@ -137,26 +150,28 @@ mimedy/
 ├── pyproject.toml
 └── src/mimedy/
     ├── main.py           # Point d'entrée de la CLI (Typer)
+    ├── config.py         # Chargement et validation de la configuration
     ├── organizer.py      # Règles de classement, planification et déplacements
-    ├── errors.py         # Exceptions du projet
-    └── utils.py          # Chargement de la configuration et des logs
+    └── errors.py         # Exceptions du projet
+tests/                    # Tests pytest (configuration, règles, plan, CLI)
 ```
 
 ### Développement
 
-Le code est vérifié par [Ruff](https://docs.astral.sh/ruff/) (lint et formatage), lancé automatiquement à chaque commit :
+Le code est vérifié par [Ruff](https://docs.astral.sh/ruff/) (lint et formatage) à chaque commit, et testé avec [pytest](https://docs.pytest.org/). L'intégration continue lance les deux à chaque push, sur Python 3.10 à 3.13.
 
 ```bash
-uv run pre-commit install
-uv run ruff check src
+uv run pre-commit install   # vérifications automatiques à chaque commit
+uv run pytest               # lancer les tests
 ```
 
 ### Feuille de route
 
+- [x] Configuration typée et validée
+- [x] Configuration globale dans `~/.config/mimedy/`
+- [x] Tests automatisés et intégration continue
 - [ ] Publication sur PyPI (`uv tool install mimedy`)
-- [ ] Configuration typée et validée
-- [ ] Configuration globale dans `~/.config/mimedy/`
-- [ ] Tests automatisés et intégration continue
+- [ ] Interface en terminal (TUI), en option
 
 ### Licence
 
@@ -175,8 +190,8 @@ A `Downloads` folder always ends up looking the same: PDFs, screenshots, archive
 Most organizing tools trust file extensions. But an extension can lie, be missing, or simply be wrong. **mimedy** uses [Magika](https://github.com/google/magika), Google's deep learning model that identifies a file **from its content**, to decide where it belongs.
 
 ```text
-$ mimedy ~/Downloads --config config.example.yaml
-[INFO] Loaded config from config.example.yaml
+$ mimedy ~/Downloads
+[INFO] Loaded config from /Users/me/.config/mimedy/config.yaml
 [INFO] Organizing /Users/me/Downloads
 [INFO] 'export.csv' → Data/
 [INFO] 'holidays.jpg' → Photos/
@@ -230,7 +245,7 @@ uv run mimedy ~/Downloads --dry-run --verbose
 | Option | Description |
 | :--- | :--- |
 | `DIRECTORY` | Folder to organize *(required)*. |
-| `--config PATH` | YAML configuration file *(default: `config.yaml` in the current directory)*. |
+| `--config PATH` | YAML configuration file *(default: see [Configuration](#configuration-1))*. |
 | `--dry-run` | Show planned moves without performing them. |
 | `--yes`, `-y` | Move without asking for confirmation. |
 | `--verbose`, `-v` | Show which rule applied to each file. |
@@ -246,10 +261,20 @@ Only files directly inside the folder are processed. Existing subfolders are lef
 
 ### Configuration
 
-Copy the provided example and adapt it:
+Without `--config`, mimedy reads your personal configuration file, if it exists:
+
+| System | Location |
+|---|---|
+| Linux, macOS | `~/.config/mimedy/config.yaml` (or `$XDG_CONFIG_HOME/mimedy/config.yaml`) |
+| Windows | `%APPDATA%\mimedy\config.yaml` |
+
+If it doesn't exist, the defaults are used. A file passed with `--config`, however, must exist. `mimedy --help` shows the exact location on your machine.
+
+To get started, copy the provided example and adapt it:
 
 ```bash
-cp config.example.yaml config.yaml
+mkdir -p ~/.config/mimedy
+cp config.example.yaml ~/.config/mimedy/config.yaml
 ```
 
 ```yaml
@@ -292,26 +317,28 @@ mimedy/
 ├── pyproject.toml
 └── src/mimedy/
     ├── main.py           # CLI entry point (Typer)
+    ├── config.py         # Configuration loading and validation
     ├── organizer.py      # Classification rules, planning and moves
-    ├── errors.py         # Project exceptions
-    └── utils.py          # Configuration and logging setup
+    └── errors.py         # Project exceptions
+tests/                    # pytest tests (configuration, rules, plan, CLI)
 ```
 
 ### Development
 
-Code is checked by [Ruff](https://docs.astral.sh/ruff/) (linting and formatting), run automatically on every commit:
+Code is checked by [Ruff](https://docs.astral.sh/ruff/) (linting and formatting) on every commit, and tested with [pytest](https://docs.pytest.org/). Continuous integration runs both on every push, on Python 3.10 to 3.13.
 
 ```bash
-uv run pre-commit install
-uv run ruff check src
+uv run pre-commit install   # automatic checks on every commit
+uv run pytest               # run the tests
 ```
 
 ### Roadmap
 
+- [x] Typed, validated configuration
+- [x] Global configuration in `~/.config/mimedy/`
+- [x] Automated tests and continuous integration
 - [ ] Publish on PyPI (`uv tool install mimedy`)
-- [ ] Typed, validated configuration
-- [ ] Global configuration in `~/.config/mimedy/`
-- [ ] Automated tests and continuous integration
+- [ ] Optional terminal interface (TUI)
 
 ### License
 
