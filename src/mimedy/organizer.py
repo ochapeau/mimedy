@@ -117,11 +117,10 @@ def describe_error(e: Exception) -> str:
     return str(e)
 
 
-def plan_moves(directory: Path, config: Config, *, lowercase: bool = False) -> Plan:
+def plan_moves(
+    directory: Path, magika: Magika, config: Config, *, lowercase: bool = False
+) -> Plan:
     """Decide where every file goes. Nothing is moved or created."""
-    # Loading the Magika model is slow: do it once for all files
-    magika = Magika()
-
     plan = Plan(directory)
     reserved: set[Path] = set()
 

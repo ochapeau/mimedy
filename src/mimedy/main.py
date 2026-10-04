@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
+from magika import Magika
 
 from mimedy.config import load_config
 from mimedy.errors import ConfigError
@@ -70,9 +71,12 @@ def main(  # noqa: PLR0913, PLR0917 (one parameter per CLI option)
         # Reported by Typer as a usage error, with exit code 2
         raise typer.BadParameter(str(e), param_hint="--config") from e
 
+    # Loading the Magika model is slow: do it once for all files
+    magika = Magika()
+
     # Phase 1: decide where every file goes, without touching anything
     logger.info("Organizing %s", directory)
-    plan = plan_moves(directory, config, lowercase=lowercase)
+    plan = plan_moves(directory, magika, config, lowercase=lowercase)
     log_plan(plan)
     planning_code = EXIT_FAILURES if plan.failures else EXIT_OK
 
