@@ -20,3 +20,15 @@ def make_file(tmp_path: Path) -> Callable[..., Path]:
         return path
 
     return make
+
+
+@pytest.fixture
+def write_config(tmp_path: Path) -> Callable[..., Path]:
+    """Return a function that writes YAML text to tmp_path/config.yaml."""
+
+    def write(text: str = "") -> Path:
+        path = tmp_path / "config.yaml"
+        path.write_text(text)
+        return path
+
+    return write

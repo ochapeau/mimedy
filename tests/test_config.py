@@ -9,21 +9,6 @@ import pytest
 from mimedy.config import Config, load_config
 from mimedy.errors import ConfigError
 
-# --- Fixtures ------------------------------------------------------------------
-
-
-@pytest.fixture
-def write_config(tmp_path: Path) -> Callable[[str], Path]:
-    """Return a function that writes YAML text to a config file."""
-
-    def write(text: str) -> Path:
-        path = tmp_path / "config.yaml"
-        path.write_text(text)
-        return path
-
-    return write
-
-
 # --- Loading -------------------------------------------------------------------
 
 
