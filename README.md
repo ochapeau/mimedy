@@ -185,8 +185,9 @@ uv run mimedy --help        # lancer la version en cours de développement
 - [x] Configuration globale dans `~/.config/mimedy/`
 - [x] Tests automatisés et intégration continue
 - [x] Publication sur PyPI (`uv tool install mimedy`)
-- [ ] Annuler le dernier rangement (`--undo`)
+- [ ] Ignorer les fichiers système (`.DS_Store`, `.localized`, `Thumbs.db`, `desktop.ini`…), avec une option pour les ranger quand même
 - [ ] Motifs de fichiers à ignorer (téléchargements en cours : `*.part`, `*.crdownload`…)
+- [ ] Annuler le dernier rangement (`--undo`)
 - [ ] Interface en terminal (TUI), en option
 
 ### Licence
@@ -366,8 +367,9 @@ uv run mimedy --help        # run the development version
 - [x] Global configuration in `~/.config/mimedy/`
 - [x] Automated tests and continuous integration
 - [x] Publish on PyPI (`uv tool install mimedy`)
-- [ ] Undo the last run (`--undo`)
+- [ ] Ignore system files (`.DS_Store`, `.localized`, `Thumbs.db`, `desktop.ini`…), with an option to organize them anyway
 - [ ] File patterns to ignore (downloads in progress: `*.part`, `*.crdownload`…)
+- [ ] Undo the last run (`--undo`)
 - [ ] Optional terminal interface (TUI)
 
 ### License
