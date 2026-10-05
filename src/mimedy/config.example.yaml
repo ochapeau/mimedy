@@ -1,16 +1,29 @@
 # mimedy — example configuration
 #
-# Copy this file to config.yaml and adapt it to your needs:
-#   cp config.example.yaml config.yaml
+# `mimedy --init-config` copies this file to your config location
+# (shown by `mimedy --help`): adapt it to your needs.
 #
 # Every key is optional: missing keys fall back to the built-in defaults.
 #
-# Rules are applied in this order (first match wins):
+# Ignored files stay in place (ignore_system_files, then ignore).
+# The other files go through these rules (first match wins):
 #   1. hidden       -> files whose name starts with '.'
 #   2. large_files  -> files bigger than threshold_mb
 #   3. extensions   -> exact extension match (cheap, no content analysis)
 #   4. mimetypes    -> MIME type detected by Magika from the file content
 #   5. fallback     -> Magika content group (Image, Video, Code, Document, ...)
+
+# Leave the files the system keeps in folders where they are: .DS_Store,
+# ._* (macOS), Thumbs.db, desktop.ini (Windows), .directory (KDE)...
+# The full list is in the README. Set to false to organize them anyway.
+ignore_system_files: true
+
+# More files to leave in place, as shell-style patterns matched against the
+# whole file name, ignoring case (* = anything, ? = one character).
+ignore:
+  - "*.part"          # Firefox download in progress
+  - "*.crdownload"    # Chrome download in progress
+  - "~$*"             # Microsoft Office lock file of an open document
 
 # Destination folder for hidden files (.env, .bashrc, ...)
 hidden: "Hidden"
