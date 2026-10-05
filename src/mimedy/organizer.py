@@ -4,6 +4,7 @@ import errno
 import logging
 import shutil
 from dataclasses import dataclass, field
+from fnmatch import fnmatchcase
 from pathlib import Path
 
 from magika import Magika
@@ -13,6 +14,12 @@ from mimedy.errors import ClassificationError
 
 logger = logging.getLogger("mimedy.organizer")
 
+# Files the operating system keeps in every folder: moving them is useless,
+# the system recreates them ("Icon\r" holds a macOS custom folder icon)
+SYSTEM_FILES = frozenset(
+    {".DS_Store", ".localized", "Icon\r", "Thumbs.db", "desktop.ini"}
+)
+
 
 @dataclass(frozen=True)
 class Move:
@@ -21,6 +28,14 @@ class Move:
     source: Path
     target: Path
     rule: str
+
+
+@dataclass(frozen=True)
+class Ignored:
+    """A file left in place on purpose (not a failure)."""
+
+    source: Path
+    reason: str
 
 
 @dataclass(frozen=True)
@@ -37,6 +52,7 @@ class Plan:
 
     directory: Path
     moves: list[Move] = field(default_factory=list)
+    ignored: list[Ignored] = field(default_factory=list)
     failures: list[Failure] = field(default_factory=list)
 
     @property
@@ -107,6 +123,16 @@ def unique_path(path: Path, reserved: set[Path]) -> Path:
     return candidate
 
 
+def ignore_reason(file: Path, config: Config) -> str | None:
+    """Return why the file must not be moved, or None to plan it."""
+    if config.ignore_system_files and file.name in SYSTEM_FILES:
+        return "system file"
+    for pattern in config.ignore:
+        if fnmatchcase(file.name.lower(), pattern):
+            return f"pattern {pattern}"
+    return None
+
+
 def describe_error(e: Exception) -> str:
     """Return a short reason, e.g. "Permission denied".
 
@@ -120,12 +146,21 @@ def describe_error(e: Exception) -> str:
 def plan_moves(
     directory: Path, magika: Magika, config: Config, *, lowercase: bool = False
 ) -> Plan:
-    """Decide where every file goes. Nothing is moved or created."""
+    """Decide where every file goes. Nothing is moved or created.
+
+    Ignored files are checked first: .DS_Store is hidden, and would
+    otherwise go to the hidden folder.
+    """
     plan = Plan(directory)
     reserved: set[Path] = set()
 
     for file in sorted(directory.iterdir()):
         if not file.is_file():
+            continue
+
+        reason = ignore_reason(file, config)
+        if reason is not None:
+            plan.ignored.append(Ignored(file, reason))
             continue
 
         try:
@@ -152,10 +187,12 @@ def display_target(move: Move, directory: Path) -> str:
 
 
 def log_plan(plan: Plan) -> None:
-    """Log every planned move, then every file skipped while planning."""
+    """Log the moves, the ignored files (verbose only), then the failures."""
     for move in plan.moves:
         logger.debug("'%s': rule %s", move.source.name, move.rule)
         logger.info("'%s' → %s", move.source.name, display_target(move, plan.directory))
+    for ignore in plan.ignored:
+        logger.debug("Ignored '%s': %s", ignore.source.name, ignore.reason)
     for failure in plan.failures:
         logger.warning("Skipped '%s': %s", failure.source.name, failure.reason)
 

@@ -11,6 +11,7 @@ import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field, fields
 from difflib import get_close_matches
+from functools import partial
 from pathlib import Path, PurePath
 
 import yaml
@@ -18,6 +19,10 @@ import yaml
 from mimedy.errors import ConfigError
 
 logger = logging.getLogger("mimedy.config")
+
+# Every reader takes (value, key, errors): it returns the checked value, or
+# None after adding to errors what is wrong
+Reader = Callable[[object, str, list[str]], object]
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -41,12 +46,19 @@ class Config:
       they must be compared with file.suffix.lower()
     - MIME type keys are lowercase ("application/pdf")
     - no two rules conflict once normalized
+    - ignore patterns are lowercased ("*.part"), so they must be compared
+      with file.name.lower()
     """
 
+    ignore_system_files: bool = True
+    ignore: tuple[str, ...] = ()
     hidden: str = "Hidden"
     large_files: LargeFilesConfig = field(default_factory=LargeFilesConfig)
     extensions: dict[str, str] = field(default_factory=dict)
     mimetypes: dict[str, str] = field(default_factory=dict)
+
+
+# --- Config file ---------------------------------------------------------------
 
 
 def default_config_path() -> Path:
@@ -58,6 +70,34 @@ def default_config_path() -> Path:
         # The XDG spec says to ignore an empty or relative value
         base = Path(xdg) if xdg and Path(xdg).is_absolute() else Path.home() / ".config"
     return base / "mimedy" / "config.yaml"
+
+
+def read_yaml(config_path: Path) -> dict:
+    """Read a YAML config file as a mapping of settings.
+
+    Raise ConfigError if the file is missing, unreadable, not valid YAML, or
+    not a mapping.
+    """
+    try:
+        with config_path.open() as f:
+            data = yaml.safe_load(f) or {}
+    except FileNotFoundError as e:
+        msg = f"Config file not found: {config_path}"
+        raise ConfigError(msg) from e
+    except OSError as e:
+        msg = f"Cannot read {config_path}: {e.strerror}"
+        raise ConfigError(msg) from e
+    except yaml.YAMLError as e:
+        msg = f"Invalid YAML in {config_path}: {e}"
+        raise ConfigError(msg) from e
+
+    if not isinstance(data, dict):
+        msg = f"Invalid config in {config_path}: expected a mapping of settings"
+        raise ConfigError(msg)
+    return data
+
+
+# --- Error reporting -----------------------------------------------------------
 
 
 def check_unknown_keys(data: dict, config_class: type, errors: list[str]) -> None:
@@ -73,6 +113,43 @@ def check_unknown_keys(data: dict, config_class: type, errors: list[str]) -> Non
         if close_match:
             err_msg += f" (did you mean '{close_match[0]}'?)"
         errors.append(err_msg)
+
+
+def add_section_errors(
+    section: str, section_errors: list[str], errors: list[str]
+) -> None:
+    """Add the errors of a config section, grouped under its name."""
+    details = "\n".join(f"    - {error}" for error in section_errors)
+    errors.append(f"In '{section}':\n{details}")
+
+
+# --- Single values -------------------------------------------------------------
+
+
+def read_bool(value: object, key: str, errors: list[str]) -> bool | None:
+    """Read a YAML boolean (true/false, yes/no), not a quoted "true" or 1."""
+    if not isinstance(value, bool):
+        errors.append(f"'{key}' must be true or false, got {type(value).__name__}")
+        return None
+    return value
+
+
+def read_threshold(value: object, key: str, errors: list[str]) -> float | None:
+    """Read a strictly positive number, booleans excluded."""
+    # YAML reads "yes" as True, and True is an int in Python: reject it first
+    if isinstance(value, bool):
+        errors.append(f"'{key}' must be a number, got bool")
+        return None
+
+    if not isinstance(value, (int, float)):
+        errors.append(f"'{key}' must be a positive number, got {type(value).__name__}")
+        return None
+
+    threshold = float(value)
+    if threshold <= 0:
+        errors.append(f"'{key}' must be a positive number")
+        return None
+    return threshold
 
 
 def read_dir(value: object, key: str, errors: list[str]) -> str | None:
@@ -115,30 +192,36 @@ def read_dir(value: object, key: str, errors: list[str]) -> str | None:
     return str(path)
 
 
-def read_threshold(value: object, key: str, errors: list[str]) -> float | None:
-    """Read a strictly positive number, booleans excluded."""
-    # YAML reads "yes" as True, and True is an int in Python: reject it first
-    if isinstance(value, bool):
-        errors.append(f"'{key}' must be a number, got bool")
+# --- Lists and mappings --------------------------------------------------------
+
+
+def read_patterns(value: object, key: str, errors: list[str]) -> tuple[str, ...] | None:
+    """Read a list of file name patterns ("*.part", "~$*").
+
+    Surrounding spaces are stripped and patterns are lowercased, so they
+    must be compared with the lowercased file name.
+    """
+    if not isinstance(value, list):
+        errors.append(f"'{key}' must be a list, got {type(value).__name__}")
         return None
 
-    if not isinstance(value, (int, float)):
-        errors.append(f"'{key}' must be a positive number, got {type(value).__name__}")
+    patterns_errors: list[str] = []
+    patterns: list[str] = []
+    for i, pattern in enumerate(value):
+        if not isinstance(pattern, str):
+            patterns_errors.append(
+                f"item {i + 1} must be a string, got {type(pattern).__name__}"
+            )
+            continue
+        stripped = pattern.strip()
+        if not stripped:
+            patterns_errors.append(f"item {i + 1} must not be empty")
+            continue
+        patterns.append(stripped.lower())
+    if patterns_errors:
+        add_section_errors(key, patterns_errors, errors)
         return None
-
-    threshold = float(value)
-    if threshold <= 0:
-        errors.append(f"'{key}' must be a positive number")
-        return None
-    return threshold
-
-
-def add_section_errors(
-    section: str, section_errors: list[str], errors: list[str]
-) -> None:
-    """Add the errors of a config section, grouped under its name."""
-    details = "\n".join(f"    - {error}" for error in section_errors)
-    errors.append(f"In '{section}':\n{details}")
+    return tuple(patterns)
 
 
 def normalize_extension(extension: str) -> str:
@@ -203,58 +286,60 @@ def read_mapping(
     return mapping
 
 
-def read_large_files(value: object, errors: list[str]) -> LargeFilesConfig | None:
+# --- Sections ------------------------------------------------------------------
+
+
+def read_fields(
+    data: dict, readers: dict[str, Reader], errors: list[str]
+) -> dict[str, object]:
+    """Read every key of data that has a reader, in the readers' order.
+
+    Return the valid values only: missing or invalid keys keep the
+    dataclass default.
+    """
+    values = {}
+    for key, read in readers.items():
+        if key in data:
+            value = read(data[key], key, errors)
+            if value is not None:
+                values[key] = value
+    return values
+
+
+LARGE_FILES_READERS: dict[str, Reader] = {
+    "threshold_mb": read_threshold,
+    "target_dir": read_dir,
+}
+
+
+def read_large_files(
+    value: object, key: str, errors: list[str]
+) -> LargeFilesConfig | None:
     """Read the large_files section: threshold_mb and target_dir."""
     if not isinstance(value, dict):
-        errors.append(f"'large_files' must be a mapping, got {type(value).__name__}")
+        errors.append(f"'{key}' must be a mapping, got {type(value).__name__}")
         return None
 
     # Errors are grouped under "In 'large_files':", unknown keys included
-    large_files_errors: list[str] = []
-    check_unknown_keys(value, LargeFilesConfig, large_files_errors)
+    section_errors: list[str] = []
+    check_unknown_keys(value, LargeFilesConfig, section_errors)
+    values = read_fields(value, LARGE_FILES_READERS, section_errors)
 
-    kwargs = {}
-    if "threshold_mb" in value:
-        threshold_mb = read_threshold(
-            value["threshold_mb"], "threshold_mb", large_files_errors
-        )
-        if threshold_mb is not None:
-            kwargs["threshold_mb"] = threshold_mb
-    if "target_dir" in value:
-        target_dir = read_dir(value["target_dir"], "target_dir", large_files_errors)
-        if target_dir is not None:
-            kwargs["target_dir"] = target_dir
-
-    if large_files_errors:
-        add_section_errors("large_files", large_files_errors, errors)
+    if section_errors:
+        add_section_errors(key, section_errors, errors)
         return None
+    return LargeFilesConfig(**values)
 
-    return LargeFilesConfig(**kwargs)
 
-
-def read_yaml(config_path: Path) -> dict:
-    """Read a YAML config file as a mapping of settings.
-
-    Raise ConfigError if the file is missing, unreadable, not valid YAML, or
-    not a mapping.
-    """
-    try:
-        with config_path.open() as f:
-            data = yaml.safe_load(f) or {}
-    except FileNotFoundError as e:
-        msg = f"Config file not found: {config_path}"
-        raise ConfigError(msg) from e
-    except OSError as e:
-        msg = f"Cannot read {config_path}: {e.strerror}"
-        raise ConfigError(msg) from e
-    except yaml.YAMLError as e:
-        msg = f"Invalid YAML in {config_path}: {e}"
-        raise ConfigError(msg) from e
-
-    if not isinstance(data, dict):
-        msg = f"Invalid config in {config_path}: expected a mapping of settings"
-        raise ConfigError(msg)
-    return data
+# The order of this dict is the order of the error messages
+CONFIG_READERS: dict[str, Reader] = {
+    "ignore_system_files": read_bool,
+    "ignore": read_patterns,
+    "hidden": read_dir,
+    "extensions": partial(read_mapping, normalize=normalize_extension),
+    "mimetypes": partial(read_mapping, normalize=str.lower),
+    "large_files": read_large_files,
+}
 
 
 def load_config(config_path: Path | None = None) -> Config:
@@ -272,32 +357,12 @@ def load_config(config_path: Path | None = None) -> Config:
             logger.debug("No config file at %s, using defaults", config_path)
             return Config()
 
-    config_to_load = read_yaml(config_path)
+    data = read_yaml(config_path)
 
     # Collect every error before reporting, so they can all be fixed at once
     errors: list[str] = []
-    check_unknown_keys(config_to_load, Config, errors)
-
-    config_kwargs = {}
-    if "hidden" in config_to_load:
-        hidden = read_dir(config_to_load["hidden"], "hidden", errors)
-        if hidden is not None:
-            config_kwargs["hidden"] = hidden
-    if "extensions" in config_to_load:
-        extensions = read_mapping(
-            config_to_load["extensions"], "extensions", errors, normalize_extension
-        )
-        if extensions is not None:
-            config_kwargs["extensions"] = extensions
-    if "mimetypes" in config_to_load:
-        mimetypes = read_mapping(
-            config_to_load["mimetypes"], "mimetypes", errors, str.lower
-        )
-        if mimetypes is not None:
-            config_kwargs["mimetypes"] = mimetypes
-
-    large_files_config = config_to_load.get("large_files", {})
-    large_files = read_large_files(large_files_config, errors)
+    check_unknown_keys(data, Config, errors)
+    values = read_fields(data, CONFIG_READERS, errors)
 
     if errors:
         details = "\n".join(f"  - {error}" for error in errors)
@@ -305,4 +370,4 @@ def load_config(config_path: Path | None = None) -> Config:
         raise ConfigError(msg)
 
     logger.info("Loaded config from %s", config_path)
-    return Config(**config_kwargs, large_files=large_files)
+    return Config(**values)

@@ -6,6 +6,7 @@ from pathlib import Path
 from mimedy.config import Config
 from mimedy.organizer import (
     Failure,
+    Ignored,
     Move,
     display_target,
     execute,
@@ -82,6 +83,86 @@ def test_planning_does_not_touch_the_disk(
     after_plan_dir_state = sorted(tmp_path.rglob("*"))
 
     assert before_plan_dir_state == after_plan_dir_state  # disk not modified by plan
+
+
+# --- Ignoring -------------------------------------------------------------------
+
+
+def test_system_files_are_ignored(
+    tmp_path: Path, make_file: Callable[..., Path]
+) -> None:
+    ds_store = make_file(".DS_Store")
+    thumbs_db = make_file("Thumbs.db")
+
+    magika = FakeMagika()
+    plan = plan_moves(tmp_path, magika, Config())
+
+    assert plan.moves == []
+    assert plan.ignored == [
+        Ignored(source=ds_store, reason="system file"),
+        Ignored(source=thumbs_db, reason="system file"),
+    ]
+    assert plan.failures == []
+    assert magika.calls == []
+
+
+def test_system_files_are_moved_when_not_ignored(
+    tmp_path: Path, make_file: Callable[..., Path]
+) -> None:
+    ds_store = make_file(".DS_Store")
+    config = Config(ignore_system_files=False)
+
+    plan = plan_moves(tmp_path, FakeMagika(), config)
+
+    assert plan.moves == [
+        Move(ds_store, tmp_path / "Hidden" / ".DS_Store", "hidden file")
+    ]
+    assert plan.ignored == []
+    assert plan.failures == []
+
+
+def test_other_hidden_files_still_go_to_hidden(
+    tmp_path: Path, make_file: Callable[..., Path]
+) -> None:
+    env = make_file(".env")
+
+    plan = plan_moves(tmp_path, FakeMagika(), Config())
+
+    assert plan.moves == [Move(env, tmp_path / "Hidden" / ".env", "hidden file")]
+    assert plan.ignored == []
+    assert plan.failures == []
+
+
+def test_ignore_patterns_ignore_case(
+    tmp_path: Path, make_file: Callable[..., Path]
+) -> None:
+    a = make_file("a.part")
+    b = make_file("B.PART")
+    config = Config(ignore=("*.part",))
+
+    plan = plan_moves(tmp_path, FakeMagika(), config)
+
+    assert plan.moves == []
+    # A set ignores the order: "B" sorts before "a" (uppercase comes first)
+    assert set(plan.ignored) == {
+        Ignored(source=a, reason="pattern *.part"),
+        Ignored(source=b, reason="pattern *.part"),
+    }
+    assert plan.failures == []
+
+
+def test_ignore_patterns_match_the_whole_name(
+    tmp_path: Path, make_file: Callable[..., Path]
+) -> None:
+    report = make_file("report.docx")
+    report_lock = make_file("~$report.docx")
+    config = Config(ignore=("~$*",))
+
+    plan = plan_moves(tmp_path, FakeMagika(), config)
+
+    assert [move.source for move in plan.moves] == [report]
+    assert plan.ignored == [Ignored(source=report_lock, reason="pattern ~$*")]
+    assert plan.failures == []
 
 
 # --- Execution ------------------------------------------------------------------

@@ -3,12 +3,20 @@
 import re
 import sys
 from collections.abc import Callable
+from dataclasses import fields
 from importlib.resources import files
 from pathlib import Path
 
 import pytest
 
-from mimedy.config import Config, default_config_path, load_config
+from mimedy.config import (
+    CONFIG_READERS,
+    LARGE_FILES_READERS,
+    Config,
+    LargeFilesConfig,
+    default_config_path,
+    load_config,
+)
 from mimedy.errors import ConfigError
 
 # --- Loading -------------------------------------------------------------------
@@ -45,6 +53,17 @@ def test_unknown_key_suggests_the_right_one(
         load_config(path)
 
 
+@pytest.mark.parametrize(
+    ("config_class", "readers"),
+    [(Config, CONFIG_READERS), (LargeFilesConfig, LARGE_FILES_READERS)],
+)
+def test_every_field_has_a_reader(
+    config_class: type, readers: dict[str, object]
+) -> None:
+    # A new field without a reader would be accepted, then silently ignored
+    assert {f.name for f in fields(config_class)} == readers.keys()
+
+
 # --- Value types ---------------------------------------------------------------
 
 
@@ -71,6 +90,62 @@ def test_non_string_destination_is_rejected(
     path = write_config("hidden: 42\n")
 
     with pytest.raises(ConfigError, match="'hidden' must be a string, got int"):
+        load_config(path)
+
+
+# --- Ignore --------------------------------------------------------------------
+
+
+def test_ignore_defaults() -> None:
+    config = load_config()
+    assert config.ignore_system_files is True
+    assert config.ignore == ()
+
+
+def test_ignore_settings_are_loaded(write_config: Callable[[str], Path]) -> None:
+    path = write_config(
+        """
+        ignore_system_files: false
+        ignore:
+        - "*.PART"
+        - "*.crdownload"
+        """
+    )
+
+    config = load_config(path)
+    assert config.ignore_system_files is False
+    assert config.ignore == ("*.part", "*.crdownload")
+
+
+@pytest.mark.parametrize("value", ["'true'", "1"])
+def test_invalid_ignore_system_files_is_rejected(
+    write_config: Callable[[str], Path], value: str
+) -> None:
+    path = write_config(f"ignore_system_files: {value}")
+    with pytest.raises(ConfigError, match=r"must be true or false, got"):
+        load_config(path)
+
+
+def test_ignore_must_be_a_list(write_config: Callable[[str], Path]) -> None:
+    path = write_config("ignore: '*.part'")
+    with pytest.raises(ConfigError, match=r"must be a list, got str"):
+        load_config(path)
+
+
+@pytest.mark.parametrize(
+    ("item", "message"),
+    [
+        ("''", "must not be empty"),  # empty string
+        ("'   '", "must not be empty"),  # only spaces
+        ("42", "must be a string, got int"),  # not a string
+        ("", "must be a string, got NoneType"),  # "- " alone: YAML reads None
+    ],
+)
+def test_invalid_ignore_patterns_are_rejected(
+    write_config: Callable[[str], Path], item: str, message: str
+) -> None:
+    path = write_config(f"ignore:\n  - {item}\n")
+    with pytest.raises(ConfigError, match=message):
         load_config(path)
 
 
@@ -173,6 +248,11 @@ def test_mimetypes_are_lowercased(write_config: Callable[[str], Path]) -> None:
 def test_all_errors_are_reported_at_once(write_config: Callable[[str], Path]) -> None:
     path = write_config(
         """
+        ignore_system_files: "yes"
+        ignore:
+          - "*.part"
+          - ""
+          - 42
         hidden: 42
         large_files:
             threshold_mb: 0
@@ -193,6 +273,10 @@ def test_all_errors_are_reported_at_once(write_config: Callable[[str], Path]) ->
 
     lines = str(exc_info.value).splitlines()[1:]  # skip "Invalid config in <path>:"
     assert lines == [
+        "  - 'ignore_system_files' must be true or false, got str",
+        "  - In 'ignore':",
+        "    - item 2 must not be empty",
+        "    - item 3 must be a string, got int",
         "  - 'hidden' must be a string, got int",
         "  - In 'extensions':",
         "    - '.JPG' and '.jpg' are the same rule but go to different folders",
