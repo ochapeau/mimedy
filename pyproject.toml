@@ -18,11 +18,12 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: System :: Filesystems",
     "Topic :: Utilities",
 ]
 dependencies = [
-    "magika>=0.6.2",
+    "magika>=1.0.3",
     "pyyaml>=6.0.2",
     "typer>=0.16",
 ]

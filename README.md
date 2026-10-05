@@ -169,7 +169,7 @@ mimedy/
 
 ### Développement
 
-Le code est vérifié par [Ruff](https://docs.astral.sh/ruff/) (lint et formatage) à chaque commit, et testé avec [pytest](https://docs.pytest.org/). L'intégration continue lance les deux à chaque push, sur Python 3.10 à 3.13.
+Le code est vérifié par [Ruff](https://docs.astral.sh/ruff/) (lint et formatage) à chaque commit, et testé avec [pytest](https://docs.pytest.org/). L'intégration continue lance les deux à chaque push, sur Python 3.10 à 3.14.
 
 ```bash
 git clone https://github.com/ochapeau/mimedy.git
@@ -352,7 +352,7 @@ mimedy/
 
 ### Development
 
-Code is checked by [Ruff](https://docs.astral.sh/ruff/) (linting and formatting) on every commit, and tested with [pytest](https://docs.pytest.org/). Continuous integration runs both on every push, on Python 3.10 to 3.13.
+Code is checked by [Ruff](https://docs.astral.sh/ruff/) (linting and formatting) on every commit, and tested with [pytest](https://docs.pytest.org/). Continuous integration runs both on every push, on Python 3.10 to 3.14.
 
 ```bash
 git clone https://github.com/ochapeau/mimedy.git
