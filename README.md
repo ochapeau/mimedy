@@ -93,7 +93,8 @@ mimedy ~/Downloads --dry-run --verbose
 | `--version`, `-V` | Affiche la version. |
 | `--help`, `-h` | Affiche l'aide. |
 | `--init-config` | Crée une configuration d'exemple commentée à l'emplacement par défaut (sans jamais écraser une configuration existante). |
-| `--install-completion` | Active l'autocomplétion des options avec Tab dans votre shell (une seule fois suffit). |
+| `--install-completion` | Active l'autocomplétion des options avec Tab dans votre shell, détecté automatiquement : bash, zsh, fish ou PowerShell (une seule fois suffit). |
+| `--show-completion` | Affiche le script d'autocomplétion, pour l'installer vous-même (par exemple si votre configuration de shell n'est pas à l'emplacement habituel). |
 
 Seuls les fichiers situés directement dans le dossier sont traités. Les sous-dossiers existants ne sont pas touchés, ce qui permet de relancer l'outil sans risque.
 
@@ -276,7 +277,8 @@ mimedy ~/Downloads --dry-run --verbose
 | `--version`, `-V` | Show the version. |
 | `--help`, `-h` | Show the help. |
 | `--init-config` | Create a commented example config at the default location (never overwrites an existing one). |
-| `--install-completion` | Enable Tab completion of the options in your shell (once is enough). |
+| `--install-completion` | Enable Tab completion of the options in your shell, detected automatically: bash, zsh, fish or PowerShell (once is enough). |
+| `--show-completion` | Print the completion script, to install it yourself (e.g. when your shell config is not in the usual location). |
 
 Only files directly inside the folder are processed. Existing subfolders are left untouched, so the tool can safely be run again.
 
