@@ -14,11 +14,32 @@ from mimedy.errors import ClassificationError
 
 logger = logging.getLogger("mimedy.organizer")
 
-# Files the operating system keeps in every folder: moving them is useless,
-# the system recreates them ("Icon\r" holds a macOS custom folder icon)
+# Files the operating system or the file manager keeps in folders: moving them
+# is useless (they are recreated) or breaks what they describe. Lowercase,
+# because Windows and default macOS volumes ignore case.
 SYSTEM_FILES = frozenset(
-    {".DS_Store", ".localized", "Icon\r", "Thumbs.db", "desktop.ini"}
+    {
+        # macOS
+        ".ds_store",  # Finder view settings
+        ".localized",  # translated folder name
+        "icon\r",  # custom folder icon (the name really ends with a carriage return)
+        ".volumeicon.icns",  # custom drive icon
+        ".com.apple.timemachine.donotpresent",  # Time Machine marker
+        ".apdisk",  # network share info
+        # Windows
+        "thumbs.db",  # thumbnail cache
+        "ehthumbs.db",  # Media Center thumbnail cache
+        "ehthumbs_vista.db",
+        "desktop.ini",  # folder appearance
+        # Linux
+        ".directory",  # KDE Dolphin folder settings
+        ".hidden",  # files hidden by GNOME Files
+    }
 )
+
+# macOS writes "._photo.jpg" next to "photo.jpg" on USB drives and network
+# shares, to keep its metadata: it only makes sense next to its file
+APPLEDOUBLE_PREFIX = "._"
 
 
 @dataclass(frozen=True)
@@ -123,12 +144,18 @@ def unique_path(path: Path, reserved: set[Path]) -> Path:
     return candidate
 
 
+def is_system_file(name: str) -> bool:
+    """Return whether a lowercased file name belongs to the system."""
+    return name in SYSTEM_FILES or name.startswith(APPLEDOUBLE_PREFIX)
+
+
 def ignore_reason(file: Path, config: Config) -> str | None:
     """Return why the file must not be moved, or None to plan it."""
-    if config.ignore_system_files and file.name in SYSTEM_FILES:
+    name = file.name.lower()
+    if config.ignore_system_files and is_system_file(name):
         return "system file"
     for pattern in config.ignore:
-        if fnmatchcase(file.name.lower(), pattern):
+        if fnmatchcase(name, pattern):
             return f"pattern {pattern}"
     return None
 
@@ -178,23 +205,36 @@ def plan_moves(
     return plan
 
 
+def printable(text: str) -> str:
+    """Escape control characters: "Icon\r" becomes "Icon\\r".
+
+    Printed as is, a carriage return sends the cursor back to the start of
+    the line, and the rest of the message overwrites it.
+    """
+    # repr("\r") is "'\\r'": keep it without its quotes
+    return "".join(c if c.isprintable() else repr(c)[1:-1] for c in text)
+
+
 def display_target(move: Move, directory: Path) -> str:
     """Return "Photos/" when the name is kept, "Photos/photo (1).jpg" if renamed."""
     relative = move.target.relative_to(directory)
     if move.target.name == move.source.name:
-        return f"{relative.parent}/"
-    return str(relative)
+        return printable(f"{relative.parent}/")
+    return printable(str(relative))
 
 
 def log_plan(plan: Plan) -> None:
     """Log the moves, the ignored files (verbose only), then the failures."""
     for move in plan.moves:
-        logger.debug("'%s': rule %s", move.source.name, move.rule)
-        logger.info("'%s' → %s", move.source.name, display_target(move, plan.directory))
-    for ignore in plan.ignored:
-        logger.debug("Ignored '%s': %s", ignore.source.name, ignore.reason)
+        name = printable(move.source.name)
+        logger.debug("'%s': rule %s", name, move.rule)
+        logger.info("'%s' → %s", name, display_target(move, plan.directory))
+    for ignored in plan.ignored:
+        name = printable(ignored.source.name)
+        logger.debug("Ignored '%s': %s", name, ignored.reason)
     for failure in plan.failures:
-        logger.warning("Skipped '%s': %s", failure.source.name, failure.reason)
+        name = printable(failure.source.name)
+        logger.warning("Skipped '%s': %s", name, failure.reason)
 
 
 def apply_move(move: Move) -> None:
@@ -226,14 +266,11 @@ def execute(plan: Plan) -> list[Failure]:
 
     for move in plan.moves:
         failure = try_move(move)
+        name = printable(move.source.name)
         if failure:
             failures.append(failure)
-            logger.error("Failed to move '%s': %s", move.source.name, failure.reason)
+            logger.error("Failed to move '%s': %s", name, failure.reason)
         else:
-            logger.debug(
-                "Moved '%s' → %s",
-                move.source.name,
-                display_target(move, plan.directory),
-            )
+            logger.debug("Moved '%s' → %s", name, display_target(move, plan.directory))
 
     return failures

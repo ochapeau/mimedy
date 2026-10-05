@@ -3,6 +3,8 @@
 from collections.abc import Callable
 from pathlib import Path
 
+import pytest
+
 from mimedy.config import Config
 from mimedy.organizer import (
     Failure,
@@ -11,6 +13,7 @@ from mimedy.organizer import (
     display_target,
     execute,
     plan_moves,
+    printable,
     unique_path,
 )
 from tests.fakes import FakeMagika
@@ -104,6 +107,27 @@ def test_system_files_are_ignored(
     ]
     assert plan.failures == []
     assert magika.calls == []
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "Icon\r",  # the carriage return is part of the name
+        "desktop.ini",
+        "Desktop.ini",  # system names ignore case, like Windows does
+        "THUMBS.DB",
+        "._photo.jpg",  # AppleDouble metadata of photo.jpg
+        ".directory",
+    ],
+)
+def test_system_file_names_are_recognized(
+    tmp_path: Path, make_file: Callable[..., Path], name: str
+) -> None:
+    make_file(name)
+
+    plan = plan_moves(tmp_path, FakeMagika(), Config())
+
+    assert [ignored.reason for ignored in plan.ignored] == ["system file"]
 
 
 def test_system_files_are_moved_when_not_ignored(
@@ -244,6 +268,19 @@ def test_unique_path_counts_up(tmp_path: Path, make_file: Callable[..., Path]) -
         unique_path(tmp_path / "photo.jpg", reserved=set())
         == tmp_path / "photo (2).jpg"
     )
+
+
+@pytest.mark.parametrize(
+    ("name", "shown"),
+    [
+        ("photo.jpg", "photo.jpg"),
+        ("café été.txt", "café été.txt"),  # accents and spaces are printable
+        ("Icon\r", "Icon\\r"),
+        ("\x1b[31mred", "\\x1b[31mred"),  # a terminal color code stays inert
+    ],
+)
+def test_printable_escapes_control_characters(name: str, shown: str) -> None:
+    assert printable(name) == shown
 
 
 def test_display_target_shows_folder_or_new_name() -> None:
