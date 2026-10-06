@@ -9,7 +9,7 @@ import pytest
 from typer.testing import CliRunner
 
 from mimedy.config import default_config_path
-from mimedy.main import app
+from mimedy.main import app, plural
 
 runner = CliRunner()
 
@@ -30,8 +30,9 @@ def files_in(folder: Path) -> list[str]:
     return sorted(path.relative_to(folder).as_posix() for path in folder.rglob("*"))
 
 
-# Always pass --config explicitly: by default mimedy reads config.yaml from the
-# current directory, which is the project root here, with your own config in it.
+# Always pass --config explicitly, so each test states the rules it relies on.
+# Without it, mimedy reads the per-user config: the isolate_user_config fixture
+# (conftest.py) points it to an empty folder, never to your own config.
 
 
 # --- Dry run and confirmation ---------------------------------------------------
@@ -43,11 +44,13 @@ def test_dry_run_moves_nothing(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     (downloads / "data.csv").write_text("a,b\n1,2\n")
-    config = write_config("extensions:\n  .csv: Data\n")
+    config_path = write_config("extensions:\n  .csv: Data\n")
 
-    result = runner.invoke(app, [str(downloads), "--config", str(config), "--dry-run"])
+    result = runner.invoke(
+        app, [str(downloads), "--config", str(config_path), "--dry-run"]
+    )
 
-    assert result.exit_code == 0
+    assert result.exit_code == 0  # Success
     assert files_in(downloads) == ["data.csv"]
     # Log messages go to caplog, not to result.output
     assert "Dry run: nothing was moved" in caplog.messages
@@ -57,13 +60,15 @@ def test_declined_confirmation_moves_nothing(
     downloads: Path, write_config: Callable[..., Path]
 ) -> None:
     (downloads / "data.csv").write_text("a,b\n1,2\n")
-    config = write_config("extensions:\n  .csv: Data\n")
+    config_path = write_config("extensions:\n  .csv: Data\n")
 
-    # input= is what the user types at the "Move 1 files? [y/N]" prompt
-    result = runner.invoke(app, [str(downloads), "--config", str(config)], input="n\n")
+    # input= is what the user types at the "Move 1 file? [y/N]" prompt
+    result = runner.invoke(
+        app, [str(downloads), "--config", str(config_path)], input="n\n"
+    )
 
     assert result.exit_code == 1  # Aborted
-    assert "Move 1 files?" in result.output
+    assert "Move 1 file?" in result.output
     assert files_in(downloads) == ["data.csv"]
 
 
@@ -71,13 +76,15 @@ def test_accepted_confirmation_moves_files(
     downloads: Path, write_config: Callable[..., Path]
 ) -> None:
     (downloads / "data.csv").write_text("a,b\n1,2\n")
-    config = write_config("extensions:\n  .csv: Data\n")
+    config_path = write_config("extensions:\n  .csv: Data\n")
 
-    # input= is what the user types at the "Move 1 files? [y/N]" prompt
-    result = runner.invoke(app, [str(downloads), "--config", str(config)], input="y\n")
+    # input= is what the user types at the "Move 1 file? [y/N]" prompt
+    result = runner.invoke(
+        app, [str(downloads), "--config", str(config_path)], input="y\n"
+    )
 
     assert result.exit_code == 0  # Success
-    assert "Move 1 files?" in result.output
+    assert "Move 1 file?" in result.output
     assert files_in(downloads) == ["Data", "Data/data.csv"]
 
 
@@ -85,13 +92,35 @@ def test_yes_moves_files_without_asking(
     downloads: Path, write_config: Callable[..., Path]
 ) -> None:
     (downloads / "data.csv").write_text("a,b\n1,2\n")
-    config = write_config("extensions:\n  .csv: Data\n")
+    config_path = write_config("extensions:\n  .csv: Data\n")
 
-    result = runner.invoke(app, [str(downloads), "--config", str(config), "--yes"])
+    result = runner.invoke(app, [str(downloads), "--config", str(config_path), "--yes"])
 
     assert result.exit_code == 0  # Success
     assert "Move" not in result.output
     assert files_in(downloads) == ["Data", "Data/data.csv"]
+
+
+# --- Verbose mode ---------------------------------------------------------------
+
+
+def test_verbose_lists_ignored_files(
+    downloads: Path,
+    write_config: Callable[..., Path],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    (downloads / ".DS_Store").write_bytes(b"\x00\x00\x00\x01Bud1")
+    (downloads / "data.csv").write_text("a,b\n1,2\n")
+    config_path = write_config("extensions:\n  .csv: Data\n")
+
+    result = runner.invoke(
+        app, [str(downloads), "--config", str(config_path), "--dry-run", "--verbose"]
+    )
+
+    assert result.exit_code == 0  # Success
+    # Debug messages only show with --verbose
+    assert "Ignored '.DS_Store': system file" in caplog.messages
+    assert "1 file to move into 1 folder, 0 skipped, 1 ignored" in caplog.messages
 
 
 # --- Real detection -------------------------------------------------------------
@@ -106,9 +135,9 @@ def test_pdf_without_extension_is_detected_by_content(
         b"2 0 obj\n<< /Type /Pages /Kids [] /Count 0 >>\nendobj\n"
         b"trailer\n<< /Root 1 0 R >>\n%%EOF\n"
     )
-    config = write_config("mimetypes:\n  application/pdf: PDF\n")
+    config_path = write_config("mimetypes:\n  application/pdf: PDF\n")
 
-    result = runner.invoke(app, [str(downloads), "--config", str(config), "--yes"])
+    result = runner.invoke(app, [str(downloads), "--config", str(config_path), "--yes"])
 
     assert result.exit_code == 0  # Success
     assert "Move" not in result.output
@@ -121,10 +150,10 @@ def test_pdf_without_extension_is_detected_by_content(
 def test_missing_directory_exits_with_2(
     tmp_path: Path, write_config: Callable[..., Path]
 ) -> None:
-    missing_dir = tmp_path / "missing"  # tmp_path is new and empty: never exists
-    config = write_config()
+    missing = tmp_path / "missing"  # tmp_path is new and empty: never exists
+    config_path = write_config()
 
-    result = runner.invoke(app, [str(missing_dir), "--config", str(config)])
+    result = runner.invoke(app, [str(missing), "--config", str(config_path)])
 
     assert result.exit_code == 2  # Usage error
     assert "does not exist" in result.output
@@ -133,11 +162,9 @@ def test_missing_directory_exits_with_2(
 def test_invalid_config_exits_with_2(
     downloads: Path, write_config: Callable[..., Path]
 ) -> None:
-    invalid_config = write_config("extentions:\n  .csv: Data\n")
+    config_path = write_config("extentions:\n  .csv: Data\n")
 
-    result = runner.invoke(
-        app, [str(downloads), "--config", str(invalid_config), "--yes"]
-    )
+    result = runner.invoke(app, [str(downloads), "--config", str(config_path), "--yes"])
 
     assert result.exit_code == 2  # Usage error
     assert "did you mean" in result.output
@@ -151,12 +178,33 @@ def test_unreadable_file_exits_with_1(
     file = downloads / "document"
     file.write_text("secret")
     file.chmod(0)  # make the file unreadable
-    config = write_config()
+    config_path = write_config()
 
-    result = runner.invoke(app, [str(downloads), "--config", str(config), "--yes"])
+    result = runner.invoke(app, [str(downloads), "--config", str(config_path), "--yes"])
 
-    assert result.exit_code == 1  # At least one file move failed
+    assert result.exit_code == 1  # At least one file could not be processed
     assert any("Skipped 'document'" in message for message in caplog.messages)
+
+
+def test_failure_after_moving_exits_with_1(
+    downloads: Path,
+    write_config: Callable[..., Path],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # Unlike the test above, one file can be moved: mimedy goes on to move it,
+    # then still reports the unreadable one with the exit code
+    file = downloads / "document"
+    file.write_text("secret")
+    file.chmod(0)  # make the file unreadable
+    (downloads / "data.csv").write_text("a,b\n1,2\n")
+    config_path = write_config("extensions:\n  .csv: Data\n")
+
+    result = runner.invoke(app, [str(downloads), "--config", str(config_path), "--yes"])
+
+    assert result.exit_code == 1  # At least one file could not be processed
+    assert files_in(downloads) == ["Data", "Data/data.csv", "document"]
+    # The unreadable file was skipped while planning: it is not a failed move
+    assert "Done: 1 moved, 0 failed" in caplog.messages
 
 
 # --- Config file location -------------------------------------------------------
@@ -165,14 +213,11 @@ def test_unreadable_file_exits_with_1(
 def test_config_is_read_from_default_location_without_option(
     downloads: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    # Writing default location config file
     xdg_path = tmp_path / "xdg-config"
     monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg_path))
-    path = xdg_path / "mimedy/config.yaml"
-    path.parent.mkdir(parents=True)
-    path.write_text("extensions:\n  .csv: Data\n")
-
-    # Testing the command
+    config_path = xdg_path / "mimedy/config.yaml"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text("extensions:\n  .csv: Data\n")
     (downloads / "data.csv").write_text("a,b\n1,2\n")
 
     result = runner.invoke(app, [str(downloads), "--yes"])
@@ -185,11 +230,23 @@ def test_config_is_read_from_default_location_without_option(
 def test_missing_config_option_file_exits_with_2(
     downloads: Path, tmp_path: Path
 ) -> None:
-    config = tmp_path / "nope.yaml"
-    result = runner.invoke(app, [str(downloads), "--config", str(config), "--yes"])
+    config_path = tmp_path / "missing.yaml"
+
+    result = runner.invoke(app, [str(downloads), "--config", str(config_path), "--yes"])
 
     assert result.exit_code == 2  # Usage error
     assert "Config file not found" in result.output
+
+
+# --- Messages -------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("count", "expected"),
+    [(0, "0 files"), (1, "1 file"), (2, "2 files")],
+)
+def test_plural_only_drops_the_s_for_one(count: int, expected: str) -> None:
+    assert plural(count, "file") == expected
 
 
 # --- Version --------------------------------------------------------------------
@@ -217,13 +274,12 @@ def test_init_config_creates_the_example_at_the_default_location() -> None:
 
 
 def test_init_config_never_overwrites_an_existing_config() -> None:
-    # Write a config file at default_config_path()
-    path = default_config_path()
+    config_path = default_config_path()
     content = "extensions:\n  .csv: Data\n"
-    path.parent.mkdir(parents=True)
-    path.write_text(content)
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text(content)
 
     result = runner.invoke(app, ["--init-config"])
 
     assert result.exit_code == 1  # Aborted
-    assert default_config_path().read_text() == content
+    assert config_path.read_text() == content

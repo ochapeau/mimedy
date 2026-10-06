@@ -36,7 +36,7 @@ $ mimedy ~/Downloads
 [INFO] 'report.pdf' → PDF/report (1).pdf
 [INFO] 'script.py' → Python/
 [WARNING] Skipped 'locked.txt': Magika could not read the file (permission_error)
-[INFO] 5 files to move into 4 folders, 1 skipped
+[INFO] 5 files to move into 4 folders, 1 skipped, 0 ignored
 Move 5 files? [y/N]: y
 [INFO] Done: 5 moved, 0 failed
 ```
@@ -267,7 +267,7 @@ $ mimedy ~/Downloads
 [INFO] 'report.pdf' → PDF/report (1).pdf
 [INFO] 'script.py' → Python/
 [WARNING] Skipped 'locked.txt': Magika could not read the file (permission_error)
-[INFO] 5 files to move into 4 folders, 1 skipped
+[INFO] 5 files to move into 4 folders, 1 skipped, 0 ignored
 Move 5 files? [y/N]: y
 [INFO] Done: 5 moved, 0 failed
 ```

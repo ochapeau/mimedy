@@ -68,6 +68,11 @@ def init_config(value: bool) -> None:
     raise typer.Exit(EXIT_OK)
 
 
+def plural(count: int, word: str) -> str:
+    """Return "1 file", "2 files", "0 files"."""
+    return f"{count} {word}" if count == 1 else f"{count} {word}s"
+
+
 @app.command()
 def main(  # noqa: PLR0913, PLR0917 (one parameter per CLI option)
     directory: Annotated[
@@ -144,11 +149,13 @@ def main(  # noqa: PLR0913, PLR0917 (one parameter per CLI option)
         logger.info("Nothing to move")
         raise typer.Exit(planning_code)
 
+    files_to_move = plural(len(plan.moves), "file")
     logger.info(
-        "%d files to move into %d folders, %d skipped",
-        len(plan.moves),
-        len(plan.folders),
+        "%s to move into %s, %d skipped, %d ignored",
+        files_to_move,
+        plural(len(plan.folders), "folder"),
         len(plan.failures),
+        len(plan.ignored),
     )
 
     if dry_run:
@@ -156,7 +163,7 @@ def main(  # noqa: PLR0913, PLR0917 (one parameter per CLI option)
         raise typer.Exit(planning_code)
 
     if not yes:
-        typer.confirm(f"Move {len(plan.moves)} files?", abort=True)
+        typer.confirm(f"Move {files_to_move}?", abort=True)
 
     # Phase 2: perform the plan
     failures = execute(plan)
