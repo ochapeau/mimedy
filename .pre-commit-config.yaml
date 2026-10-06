@@ -1,7 +1,32 @@
+# Git hooks run on every commit, only on staged files.
+# Setup:        uv run pre-commit install
+# Run manually: uv run pre-commit run --all-files
+# Update hooks: uv run pre-commit autoupdate
+
 repos:
+  # Generic file hygiene
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml # config.example.yaml ships to users, CI workflows
+      - id: check-toml # a broken pyproject.toml breaks the build
+      - id: check-merge-conflict # leftover <<<<<<< markers
+      - id: check-added-large-files # > 500 KB: test data, real personal files...
+      - id: detect-private-key # SSH/PEM keys only, not every kind of secret
+
+  # Lint (with safe fixes) then format
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.10
     hooks:
       - id: ruff-check
         args: [--fix]
       - id: ruff-format
+
+  # Keep uv.lock in sync with pyproject.toml (CI fails with --locked otherwise).
+  # If the hook updates uv.lock, the commit stops: git add uv.lock, commit again.
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.12.23 # match the local uv version
+    hooks:
+      - id: uv-lock
