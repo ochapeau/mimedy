@@ -17,6 +17,7 @@ dist/
 .mypy_cache/
 .coverage
 htmlcov/
+coverage.xml
 
 # OS / editors
 .DS_Store

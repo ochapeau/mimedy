@@ -1,6 +1,7 @@
 # 🗂️ mimedy
 
 [![CI](https://github.com/ochapeau/mimedy/actions/workflows/ci.yml/badge.svg)](https://github.com/ochapeau/mimedy/actions/workflows/ci.yml)
+[![Coverage](https://codecov.io/gh/ochapeau/mimedy/graph/badge.svg)](https://codecov.io/gh/ochapeau/mimedy)
 [![PyPI](https://img.shields.io/pypi/v/mimedy)](https://pypi.org/project/mimedy/)
 [![Python](https://img.shields.io/pypi/pyversions/mimedy)](https://pypi.org/project/mimedy/)
 

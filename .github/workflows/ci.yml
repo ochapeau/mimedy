@@ -23,6 +23,10 @@ jobs:
   test:
     name: Tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    # OIDC: GitHub proves to Codecov the upload comes from this repo, no token
+    permissions:
+      contents: read
+      id-token: write
     strategy:
       # Run every version even if one fails, to see the whole picture
       fail-fast: false
@@ -33,4 +37,10 @@ jobs:
       - uses: astral-sh/setup-uv@v10.2.0
         with:
           python-version: ${{ matrix.python-version }}
-      - run: uv run --locked pytest --cov
+      # term: report in the log, xml: coverage.xml for Codecov
+      - run: uv run --locked pytest --cov --cov-report=term --cov-report=xml
+      # One upload is enough: coverage is the same on every Python version
+      - uses: codecov/codecov-action@v7
+        if: matrix.python-version == '3.14'
+        with:
+          use_oidc: true
