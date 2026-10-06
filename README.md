@@ -238,6 +238,7 @@ uv run mimedy --help        # run the development version
 - [x] Ignore system files (`.DS_Store`, `.localized`, `Thumbs.db`, `desktop.ini`…), with an option to organize them anyway
 - [x] File patterns to ignore (downloads in progress: `*.part`, `*.crdownload`…)
 - [ ] Undo the last run (`--undo`)
+- [ ] Homebrew install (`brew install ochapeau/tap/mimedy`), once Magika ships its upcoming Rust engine: Homebrew builds Python dependencies from source, and today's `onnxruntime` dependency only exists as prebuilt wheels
 - [ ] Optional terminal interface (TUI)
 
 ### License
@@ -469,6 +470,7 @@ uv run mimedy --help        # lancer la version en cours de développement
 - [x] Ignorer les fichiers système (`.DS_Store`, `.localized`, `Thumbs.db`, `desktop.ini`…), avec une option pour les ranger quand même
 - [x] Motifs de fichiers à ignorer (téléchargements en cours : `*.part`, `*.crdownload`…)
 - [ ] Annuler le dernier rangement (`--undo`)
+- [ ] Installation avec Homebrew (`brew install ochapeau/tap/mimedy`), dès que Magika publiera son futur moteur en Rust : Homebrew compile les dépendances Python depuis leurs sources, et `onnxruntime`, dont Magika dépend aujourd'hui, n'existe qu'en paquets précompilés
 - [ ] Interface en terminal (TUI), en option
 
 ### Licence
