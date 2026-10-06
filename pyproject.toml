@@ -91,6 +91,7 @@ source = ["mimedy"]  # measure our package, not pytest or the tests
 branch = true  # same as --cov-branch
 
 [tool.coverage.report]
+fail_under = 95  # the run fails below 95% (lines and branches together)
 show_missing = true  # list the uncovered lines (Missing column)
 skip_covered = true  # hide files at 100%
 exclude_also = [
