@@ -45,6 +45,7 @@ build-backend = "hatchling.build"
 dev = [
     "pre-commit>=4.6.2",
     "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
     "ruff>=0.16.9",
 ]
 
@@ -84,3 +85,14 @@ select = [
 [tool.ruff.lint.per-file-ignores]
 # Tests use plain assert and literal expected values
 "tests/**" = ["S101", "PLR2004"]
+
+[tool.coverage.run]
+source = ["mimedy"]  # measure our package, not pytest or the tests
+branch = true  # same as --cov-branch
+
+[tool.coverage.report]
+show_missing = true  # list the uncovered lines (Missing column)
+skip_covered = true  # hide files at 100%
+exclude_also = [
+    'if __name__ == "__main__":',  # never runs under pytest
+]

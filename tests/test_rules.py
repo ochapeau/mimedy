@@ -30,7 +30,6 @@ def test_hidden_file_goes_to_hidden_folder(make_file: Callable[..., Path]) -> No
 
 def test_large_file_goes_to_large_folder(make_file: Callable[..., Path]) -> None:
     file = make_file("video.mp4", size=2000)
-
     threshold_mb = 0.001  # 1_000 bytes
     config = Config(large_files=LargeFilesConfig(threshold_mb=threshold_mb))
 
@@ -38,19 +37,18 @@ def test_large_file_goes_to_large_folder(make_file: Callable[..., Path]) -> None
         file, FakeMagika(), config, lowercase=False
     )
 
-    assert target == "Large"  # default Large target
+    assert target == "Large"  # default target_dir
     assert rule == f"larger than {threshold_mb} MB"
 
 
 def test_file_below_threshold_is_not_large(make_file: Callable[..., Path]) -> None:
     file = make_file("video.mp4", size=2000)
-
     threshold_mb = 0.005  # 5_000 bytes
     config = Config(large_files=LargeFilesConfig(threshold_mb=threshold_mb))
 
     target, _ = determine_target_directory(file, FakeMagika(), config, lowercase=False)
 
-    assert target == "Unknown"
+    assert target == "Unknown"  # FakeMagika's default group, capitalized
 
 
 # --- Extensions -----------------------------------------------------------------
@@ -131,7 +129,6 @@ def test_hidden_beats_extension(make_file: Callable[..., Path]) -> None:
 
 def test_large_beats_extension(make_file: Callable[..., Path]) -> None:
     file = make_file("video.mp4", size=2000)
-
     threshold_mb = 0.001  # 1_000 bytes
     config = Config(
         large_files=LargeFilesConfig(threshold_mb=threshold_mb),
@@ -142,7 +139,7 @@ def test_large_beats_extension(make_file: Callable[..., Path]) -> None:
         file, FakeMagika(), config, lowercase=False
     )
 
-    assert target == "Large"  # default Large target
+    assert target == "Large"  # default target_dir
     assert rule == f"larger than {threshold_mb} MB"
 
 

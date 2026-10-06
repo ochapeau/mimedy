@@ -41,8 +41,8 @@ def test_reserved_names_avoid_collisions(
 def test_empty_folder_gives_empty_plan(tmp_path: Path) -> None:
     plan = plan_moves(tmp_path, FakeMagika(), Config())
 
-    assert plan.moves == []  # no moves
-    assert plan.failures == []  # no failures
+    assert plan.moves == []
+    assert plan.failures == []
 
 
 def test_subfolders_are_not_planned(
@@ -52,8 +52,8 @@ def test_subfolders_are_not_planned(
 
     plan = plan_moves(tmp_path, FakeMagika(), Config())
 
-    assert plan.moves == []  # no moves because subfolders not planned
-    assert plan.failures == []  # no failures
+    assert plan.moves == []  # only files directly inside are planned
+    assert plan.failures == []
 
 
 def test_unreadable_file_is_a_failure_and_others_are_planned(
@@ -68,9 +68,7 @@ def test_unreadable_file_is_a_failure_and_others_are_planned(
     plan = plan_moves(tmp_path, magika, config)
 
     targets = {move.source.name: move.target.name for move in plan.moves}
-    # only csv planned, as jpg unreadable by fake magika
-    assert targets == {"data.csv": "data.csv"}
-    # only jpg file is a failure
+    assert targets == {"data.csv": "data.csv"}  # the extension rule needs no Magika
     assert plan.failures == [
         Failure(source=photo, reason=f"Magika could not read the file ({status})")
     ]
@@ -81,11 +79,11 @@ def test_planning_does_not_touch_the_disk(
 ) -> None:
     make_file("data.csv")
 
-    before_plan_dir_state = sorted(tmp_path.rglob("*"))
+    files_before = sorted(tmp_path.rglob("*"))
     plan_moves(tmp_path, FakeMagika(), Config())
-    after_plan_dir_state = sorted(tmp_path.rglob("*"))
+    files_after = sorted(tmp_path.rglob("*"))
 
-    assert before_plan_dir_state == after_plan_dir_state  # disk not modified by plan
+    assert files_after == files_before
 
 
 # --- Ignoring -------------------------------------------------------------------
@@ -96,8 +94,8 @@ def test_system_files_are_ignored(
 ) -> None:
     ds_store = make_file(".DS_Store")
     thumbs_db = make_file("Thumbs.db")
-
     magika = FakeMagika()
+
     plan = plan_moves(tmp_path, magika, Config())
 
     assert plan.moves == []
@@ -106,7 +104,7 @@ def test_system_files_are_ignored(
         Ignored(source=thumbs_db, reason="system file"),
     ]
     assert plan.failures == []
-    assert magika.calls == []
+    assert magika.calls == []  # ignored before any content analysis
 
 
 @pytest.mark.parametrize(
@@ -139,7 +137,7 @@ def test_system_files_are_moved_when_not_ignored(
     plan = plan_moves(tmp_path, FakeMagika(), config)
 
     assert plan.moves == [
-        Move(ds_store, tmp_path / "Hidden" / ".DS_Store", "hidden file")
+        Move(source=ds_store, target=tmp_path / "Hidden/.DS_Store", rule="hidden file")
     ]
     assert plan.ignored == []
     assert plan.failures == []
@@ -152,7 +150,9 @@ def test_other_hidden_files_still_go_to_hidden(
 
     plan = plan_moves(tmp_path, FakeMagika(), Config())
 
-    assert plan.moves == [Move(env, tmp_path / "Hidden" / ".env", "hidden file")]
+    assert plan.moves == [
+        Move(source=env, target=tmp_path / "Hidden/.env", rule="hidden file")
+    ]
     assert plan.ignored == []
     assert plan.failures == []
 
@@ -160,8 +160,8 @@ def test_other_hidden_files_still_go_to_hidden(
 def test_ignore_patterns_ignore_case(
     tmp_path: Path, make_file: Callable[..., Path]
 ) -> None:
-    a = make_file("a.part")
-    b = make_file("B.PART")
+    lowercase = make_file("a.part")
+    uppercase = make_file("B.PART")
     config = Config(ignore=("*.part",))
 
     plan = plan_moves(tmp_path, FakeMagika(), config)
@@ -169,8 +169,8 @@ def test_ignore_patterns_ignore_case(
     assert plan.moves == []
     # A set ignores the order: "B" sorts before "a" (uppercase comes first)
     assert set(plan.ignored) == {
-        Ignored(source=a, reason="pattern *.part"),
-        Ignored(source=b, reason="pattern *.part"),
+        Ignored(source=lowercase, reason="pattern *.part"),
+        Ignored(source=uppercase, reason="pattern *.part"),
     }
     assert plan.failures == []
 
@@ -199,13 +199,12 @@ def test_files_are_moved_and_folders_created(
     config = Config(extensions={".csv": "Data"})
     plan = plan_moves(tmp_path, FakeMagika(), config)
 
-    before_execute_dir_state = sorted(tmp_path.rglob("*"))
+    files_before = sorted(tmp_path.rglob("*"))
     failures = execute(plan)
-    after_execute_dir_state = sorted(tmp_path.rglob("*"))
+    files_after = sorted(tmp_path.rglob("*"))
 
-    assert before_execute_dir_state == [tmp_path / "data.csv"]
-    # execute created and moved the file to subfolder
-    assert after_execute_dir_state == [tmp_path / "Data", tmp_path / "Data/data.csv"]
+    assert files_before == [tmp_path / "data.csv"]
+    assert files_after == [tmp_path / "Data", tmp_path / "Data/data.csv"]
     assert failures == []
 
 
@@ -230,18 +229,17 @@ def test_target_appeared_since_planning_is_a_failure(
 def test_vanished_source_is_a_failure_and_others_are_moved(
     tmp_path: Path, make_file: Callable[..., Path]
 ) -> None:
-    # Planning two files
     make_file("data.csv")
     photo = make_file("photo.jpg")
     config = Config(extensions={".csv": "Data", ".jpg": "Photos"})
     plan = plan_moves(tmp_path, FakeMagika(), config)
 
-    # delete photo
+    # Between planning and execution, the photo is deleted
     photo.unlink()
 
     failures = execute(plan)
 
-    assert (tmp_path / "Data" / "data.csv").exists()  # csv has been moved
+    assert (tmp_path / "Data/data.csv").exists()  # the other file was moved
     assert [failure.source for failure in failures] == [photo]
 
 
@@ -249,20 +247,20 @@ def test_vanished_source_is_a_failure_and_others_are_moved(
 
 
 def test_unique_path_counts_up(tmp_path: Path, make_file: Callable[..., Path]) -> None:
-    # Basic test
+    # Free name: kept as is
     assert unique_path(tmp_path / "photo.jpg", reserved=set()) == tmp_path / "photo.jpg"
-    # Reserved test
+    # Already given to another file of the plan
     assert (
         unique_path(tmp_path / "photo.jpg", reserved={tmp_path / "photo.jpg"})
         == tmp_path / "photo (1).jpg"
     )
-    # Collision test
+    # Already taken on disk
     make_file("photo.jpg")
     assert (
         unique_path(tmp_path / "photo.jpg", reserved=set())
         == tmp_path / "photo (1).jpg"
     )
-    # Second collision test
+    # Both taken on disk: the counter goes on
     make_file("photo (1).jpg")
     assert (
         unique_path(tmp_path / "photo.jpg", reserved=set())
