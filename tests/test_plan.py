@@ -393,12 +393,12 @@ def test_target_appeared_since_planning_is_a_failure(
 
     # Between planning and execution, another file takes the target name
     intruder = make_file(f"Data/{data.name}")
-    intruder.write_text("someone else")
+    intruder.write_text("someone else", encoding="utf-8")
 
     failures = execute(plan)
 
     assert [failure.source for failure in failures] == [data]
-    assert intruder.read_text() == "someone else"  # never overwritten
+    assert intruder.read_text(encoding="utf-8") == "someone else"  # never overwritten
     assert data.exists()  # the source did not move
 
 

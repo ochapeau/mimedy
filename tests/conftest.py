@@ -35,9 +35,12 @@ def write_config(tmp_path: Path) -> Callable[..., Path]:
 
 
 @pytest.fixture(autouse=True)
-def isolate_user_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """Never read the developer's real ~/.config/mimedy/config.yaml in tests.
+def isolate_user_dirs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Never touch the developer's real config or journals in tests.
 
-    autouse=True applies this fixture to every test without asking for it.
+    The config (~/.config/mimedy) and the journals (~/.local/state/mimedy)
+    point to empty folders of tmp_path instead. autouse=True applies this
+    fixture to every test without asking for it.
     """
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg-config"))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg-state"))
