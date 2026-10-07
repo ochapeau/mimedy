@@ -5,7 +5,7 @@ import logging
 import shutil
 from dataclasses import dataclass, field
 from fnmatch import fnmatchcase
-from pathlib import Path
+from pathlib import Path, PurePath
 
 from magika import Magika
 
@@ -144,6 +144,23 @@ def unique_path(path: Path, reserved: set[Path]) -> Path:
     return candidate
 
 
+def blocking_file(directory: Path, target_dir: str) -> Path | None:
+    """Return what blocks the target folder, or None if the way is free.
+
+    Every level of target_dir is checked, from the top: with "Code/Python",
+    a file named "Code" blocks as much as a file "Code/Python". A level
+    blocks when it exists but is not a folder (a file, a link to a file...).
+    On a case-insensitive disk, as on macOS by default, a file "data" also
+    blocks "Data": the disk itself answers that "Data" exists.
+    """
+    current = directory
+    for part in PurePath(target_dir).parts:
+        current = current / part
+        if current.exists() and not current.is_dir():
+            return current
+    return None
+
+
 def is_system_file(name: str) -> bool:
     """Return whether a lowercased file name belongs to the system."""
     return name in SYSTEM_FILES or name.startswith(APPLEDOUBLE_PREFIX)
@@ -176,7 +193,8 @@ def plan_moves(
     """Decide where every file goes. Nothing is moved or created.
 
     Ignored files are checked first: .DS_Store is hidden, and would
-    otherwise go to the hidden folder.
+    otherwise go to the hidden folder. A file whose target folder is blocked
+    by a file of the same name is a failure, not a move that would fail.
     """
     plan = Plan(directory)
     reserved: set[Path] = set()
@@ -198,6 +216,19 @@ def plan_moves(
             plan.failures.append(Failure(file, describe_error(e)))
             continue
 
+        # A file named like the target folder would make the move fail at
+        # execution: report it now, so that the plan shows what will happen.
+        # Refused even if that file goes elsewhere: never rely on the order
+        blocker = blocking_file(directory, target_dir)
+        if blocker is not None:
+            name = blocker.relative_to(directory)
+            reason = f"the folder name '{name}' is taken by a file: rename it"
+            plan.failures.append(Failure(source=file, reason=reason))
+            continue
+
+        # Pick a free name in the target folder ("photo (1).jpg" when the name
+        # is taken on disk or by an earlier file of this plan), and reserve it
+        # for this file, so that no later file of the plan gets it too
         target = unique_path(directory / target_dir / file.name, reserved)
         reserved.add(target)
         plan.moves.append(Move(file, target, rule))

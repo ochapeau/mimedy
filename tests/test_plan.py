@@ -10,6 +10,7 @@ from mimedy.organizer import (
     Failure,
     Ignored,
     Move,
+    blocking_file,
     display_target,
     execute,
     plan_moves,
@@ -24,6 +25,7 @@ from tests.fakes import FakeMagika
 def test_reserved_names_avoid_collisions(
     tmp_path: Path, make_file: Callable[..., Path]
 ) -> None:
+    # A name is taken if it exists on disk or was given earlier in the plan
     make_file("PDF/a.pdf")  # already organized
     make_file("a.pdf")
     make_file("a (1).pdf")
@@ -39,6 +41,7 @@ def test_reserved_names_avoid_collisions(
 
 
 def test_empty_folder_gives_empty_plan(tmp_path: Path) -> None:
+    # Nothing to organize is an empty plan, not an error
     plan = plan_moves(tmp_path, FakeMagika(), Config())
 
     assert plan.moves == []
@@ -48,6 +51,7 @@ def test_empty_folder_gives_empty_plan(tmp_path: Path) -> None:
 def test_subfolders_are_not_planned(
     tmp_path: Path, make_file: Callable[..., Path]
 ) -> None:
+    # Only files directly in the folder are organized, never subfolders
     make_file("Photos/photo.jpg")
 
     plan = plan_moves(tmp_path, FakeMagika(), Config())
@@ -59,6 +63,7 @@ def test_subfolders_are_not_planned(
 def test_unreadable_file_is_a_failure_and_others_are_planned(
     tmp_path: Path, make_file: Callable[..., Path]
 ) -> None:
+    # A file Magika cannot read must not stop the others
     photo = make_file("photo.jpg")
     make_file("data.csv")
     status = "permission_error"
@@ -77,6 +82,7 @@ def test_unreadable_file_is_a_failure_and_others_are_planned(
 def test_planning_does_not_touch_the_disk(
     tmp_path: Path, make_file: Callable[..., Path]
 ) -> None:
+    # Planning only decides: nothing is created or moved
     make_file("data.csv")
 
     files_before = sorted(tmp_path.rglob("*"))
@@ -92,6 +98,7 @@ def test_planning_does_not_touch_the_disk(
 def test_system_files_are_ignored(
     tmp_path: Path, make_file: Callable[..., Path]
 ) -> None:
+    # System files stay in place, and Magika never reads them
     ds_store = make_file(".DS_Store")
     thumbs_db = make_file("Thumbs.db")
     magika = FakeMagika()
@@ -121,6 +128,7 @@ def test_system_files_are_ignored(
 def test_system_file_names_are_recognized(
     tmp_path: Path, make_file: Callable[..., Path], name: str
 ) -> None:
+    # Each kind of system name is recognized (cases above)
     make_file(name)
 
     plan = plan_moves(tmp_path, FakeMagika(), Config())
@@ -131,6 +139,7 @@ def test_system_file_names_are_recognized(
 def test_system_files_are_moved_when_not_ignored(
     tmp_path: Path, make_file: Callable[..., Path]
 ) -> None:
+    # With ignore_system_files: false, .DS_Store is a hidden file again
     ds_store = make_file(".DS_Store")
     config = Config(ignore_system_files=False)
 
@@ -146,6 +155,7 @@ def test_system_files_are_moved_when_not_ignored(
 def test_other_hidden_files_still_go_to_hidden(
     tmp_path: Path, make_file: Callable[..., Path]
 ) -> None:
+    # .env is hidden but not a system file: it still goes to Hidden/
     env = make_file(".env")
 
     plan = plan_moves(tmp_path, FakeMagika(), Config())
@@ -160,6 +170,7 @@ def test_other_hidden_files_still_go_to_hidden(
 def test_ignore_patterns_ignore_case(
     tmp_path: Path, make_file: Callable[..., Path]
 ) -> None:
+    # The pattern *.part also matches B.PART
     lowercase = make_file("a.part")
     uppercase = make_file("B.PART")
     config = Config(ignore=("*.part",))
@@ -178,6 +189,7 @@ def test_ignore_patterns_ignore_case(
 def test_ignore_patterns_match_the_whole_name(
     tmp_path: Path, make_file: Callable[..., Path]
 ) -> None:
+    # A pattern is matched against the whole name, not only the extension
     report = make_file("report.docx")
     report_lock = make_file("~$report.docx")
     config = Config(ignore=("~$*",))
@@ -189,12 +201,112 @@ def test_ignore_patterns_match_the_whole_name(
     assert plan.failures == []
 
 
+# --- Blocked target folders -----------------------------------------------------
+
+
+def test_file_named_like_the_target_folder_is_a_failure(
+    tmp_path: Path, make_file: Callable[..., Path]
+) -> None:
+    # A file "Code" takes the name of the folder Code/: both files that should
+    # go there are failures, the blocking file included
+    code = make_file("Code")
+    data = make_file("j.json")
+    magika = FakeMagika(mime_type="text/x-python", group="code")
+
+    plan = plan_moves(tmp_path, magika, Config())
+
+    reason = "the folder name 'Code' is taken by a file: rename it"
+    assert plan.moves == []  # "Code" is detected as code too: blocked by itself
+    assert plan.failures == [
+        Failure(source=code, reason=reason),
+        Failure(source=data, reason=reason),
+    ]
+
+
+def test_file_blocking_a_parent_folder_is_a_failure(
+    tmp_path: Path, make_file: Callable[..., Path]
+) -> None:
+    # The destination Code/Python is blocked one level up, by a file "Code"
+    blocker = make_file("Code")
+    script = make_file("script.py")
+    config = Config(extensions={".py": "Code/Python"})
+
+    plan = plan_moves(tmp_path, FakeMagika(), config)
+
+    # The blocking file goes to Unknown/, but script.py is refused anyway:
+    # the plan never relies on the order of the moves
+    assert [move.source for move in plan.moves] == [blocker]
+    assert [failure.source for failure in plan.failures] == [script]
+
+
+def test_existing_target_folder_is_fine(
+    tmp_path: Path, make_file: Callable[..., Path]
+) -> None:
+    # A real folder Code/ is the normal case: it must not be mistaken for a
+    # blocking file
+    make_file("Code/old.py")  # creates the folder Code/
+    script = make_file("script.py")
+    config = Config(extensions={".py": "Code"})
+
+    plan = plan_moves(tmp_path, FakeMagika(), config)
+
+    assert plan.moves == [
+        Move(source=script, target=tmp_path / "Code/script.py", rule="extension .py")
+    ]
+    assert plan.failures == []
+
+
+def test_file_blocks_the_folder_whatever_the_case(
+    tmp_path: Path, make_file: Callable[..., Path]
+) -> None:
+    # On a case-insensitive disk (macOS by default), a file "data" takes the
+    # name of the folder Data/. The test only makes sense on such a disk
+    make_file("probe")
+    if not (tmp_path / "PROBE").exists():
+        pytest.skip("this disk is case-sensitive")
+    (tmp_path / "probe").unlink()
+
+    blocker = make_file("data")
+    table = make_file("a.csv")
+    config = Config(extensions={".csv": "Data"})
+
+    plan = plan_moves(tmp_path, FakeMagika(), config)
+
+    assert [move.source for move in plan.moves] == [blocker]  # goes to Unknown/
+    assert [failure.source for failure in plan.failures] == [table]
+
+
+@pytest.mark.parametrize(
+    ("files", "target_dir", "blocker"),
+    [
+        ([], "Code/Python", None),  # nothing there yet: the way is free
+        (["Code/old.py"], "Code/Python", None),  # Code/ is a real folder
+        (["Code"], "Code/Python", "Code"),  # blocked at the first level
+        (["Code/Python"], "Code/Python", "Code/Python"),  # at the second level
+    ],
+)
+def test_blocking_file_finds_the_first_blocked_level(
+    tmp_path: Path,
+    make_file: Callable[..., Path],
+    files: list[str],
+    target_dir: str,
+    blocker: str | None,
+) -> None:
+    # The helper alone: the first level that is not a folder, or None
+    for name in files:
+        make_file(name)
+
+    expected = None if blocker is None else tmp_path / blocker
+    assert blocking_file(tmp_path, target_dir) == expected
+
+
 # --- Execution ------------------------------------------------------------------
 
 
 def test_files_are_moved_and_folders_created(
     tmp_path: Path, make_file: Callable[..., Path]
 ) -> None:
+    # Execution creates the target folders, then moves the files
     make_file("data.csv")
     config = Config(extensions={".csv": "Data"})
     plan = plan_moves(tmp_path, FakeMagika(), config)
@@ -211,6 +323,7 @@ def test_files_are_moved_and_folders_created(
 def test_target_appeared_since_planning_is_a_failure(
     tmp_path: Path, make_file: Callable[..., Path]
 ) -> None:
+    # The plan promised this exact target: never overwrite or rename it
     make_file("data.csv")
     config = Config(extensions={".csv": "Data"})
     plan = plan_moves(tmp_path, FakeMagika(), config)
@@ -229,6 +342,7 @@ def test_target_appeared_since_planning_is_a_failure(
 def test_vanished_source_is_a_failure_and_others_are_moved(
     tmp_path: Path, make_file: Callable[..., Path]
 ) -> None:
+    # A file deleted after planning fails alone: the others are moved
     make_file("data.csv")
     photo = make_file("photo.jpg")
     config = Config(extensions={".csv": "Data", ".jpg": "Photos"})
@@ -278,10 +392,12 @@ def test_unique_path_counts_up(tmp_path: Path, make_file: Callable[..., Path]) -
     ],
 )
 def test_printable_escapes_control_characters(name: str, shown: str) -> None:
+    # Control characters in a name must not garble the terminal
     assert printable(name) == shown
 
 
 def test_display_target_shows_folder_or_new_name() -> None:
+    # The plan shows the folder, or the new name when the file is renamed
     directory = Path("/downloads")
     source = directory / "data.csv"
 

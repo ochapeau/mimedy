@@ -23,6 +23,7 @@ from mimedy.errors import ConfigError
 
 
 def test_valid_config_is_loaded(write_config: Callable[..., Path]) -> None:
+    # Given keys are read, missing ones keep their default
     config_path = write_config(
         """
         hidden: Dotfiles
@@ -51,6 +52,7 @@ def test_valid_config_is_loaded(write_config: Callable[..., Path]) -> None:
 def test_unreadable_yaml_is_rejected(
     write_config: Callable[..., Path], text: str, message: str
 ) -> None:
+    # The file is not valid YAML, or not a mapping of settings
     config_path = write_config(text)
 
     with pytest.raises(ConfigError, match=message):
@@ -70,6 +72,7 @@ def test_unreadable_config_file_is_rejected(tmp_path: Path) -> None:
 def test_unknown_key_without_close_match_has_no_suggestion(
     write_config: Callable[..., Path],
 ) -> None:
+    # Nothing is close to 'zzz': the error must not suggest a wrong key
     config_path = write_config("zzz: 1\n")
 
     with pytest.raises(ConfigError) as exc_info:
@@ -83,6 +86,7 @@ def test_unknown_key_without_close_match_has_no_suggestion(
 def test_unknown_key_suggests_the_right_one(
     write_config: Callable[..., Path],
 ) -> None:
+    # A typo gets a suggestion: 'extentions' -> 'extensions'
     config_path = write_config("extentions:\n  .csv: Data\n")
 
     with pytest.raises(ConfigError, match="did you mean 'extensions'"):
@@ -114,6 +118,7 @@ def test_every_field_has_a_reader(
 def test_invalid_threshold_is_rejected(
     write_config: Callable[..., Path], value: str, message: str
 ) -> None:
+    # The threshold must be a positive number (YAML reads yes as a bool)
     config_path = write_config(f"large_files:\n  threshold_mb: {value}\n")
 
     with pytest.raises(ConfigError, match=message):
@@ -123,6 +128,7 @@ def test_invalid_threshold_is_rejected(
 def test_non_string_destination_is_rejected(
     write_config: Callable[..., Path],
 ) -> None:
+    # A folder name must be text
     config_path = write_config("hidden: 42\n")
 
     with pytest.raises(ConfigError, match="'hidden' must be a string, got int"):
@@ -144,6 +150,7 @@ def test_non_string_destination_is_rejected(
 def test_wrong_value_types_are_rejected(
     write_config: Callable[..., Path], text: str, message: str
 ) -> None:
+    # Each key checks the type of its value (cases above)
     config_path = write_config(text)
 
     with pytest.raises(ConfigError, match=re.escape(message)):
@@ -154,6 +161,7 @@ def test_wrong_value_types_are_rejected(
 
 
 def test_ignore_defaults() -> None:
+    # Without config: system files are ignored, and there is no extra pattern
     config = load_config()
 
     assert config.ignore_system_files is True
@@ -161,6 +169,7 @@ def test_ignore_defaults() -> None:
 
 
 def test_ignore_settings_are_loaded(write_config: Callable[..., Path]) -> None:
+    # Both keys are read, and patterns are lowercased to ignore case later
     config_path = write_config(
         """
         ignore_system_files: false
@@ -180,6 +189,7 @@ def test_ignore_settings_are_loaded(write_config: Callable[..., Path]) -> None:
 def test_invalid_ignore_system_files_is_rejected(
     write_config: Callable[..., Path], value: str
 ) -> None:
+    # Only real YAML booleans: a quoted 'true' or 1 is refused
     config_path = write_config(f"ignore_system_files: {value}\n")
 
     with pytest.raises(ConfigError, match="must be true or false, got"):
@@ -187,6 +197,7 @@ def test_invalid_ignore_system_files_is_rejected(
 
 
 def test_ignore_must_be_a_list(write_config: Callable[..., Path]) -> None:
+    # A single string instead of a list is a common mistake
     config_path = write_config("ignore: '*.part'\n")
 
     with pytest.raises(ConfigError, match="must be a list, got str"):
@@ -205,6 +216,7 @@ def test_ignore_must_be_a_list(write_config: Callable[..., Path]) -> None:
 def test_invalid_ignore_patterns_are_rejected(
     write_config: Callable[..., Path], item: str, message: str
 ) -> None:
+    # Each pattern must be non-empty text (cases above)
     config_path = write_config(f"ignore:\n  - {item}\n")
 
     with pytest.raises(ConfigError, match=message):
@@ -220,6 +232,7 @@ def test_invalid_ignore_patterns_are_rejected(
 def test_destinations_outside_the_folder_are_rejected(
     write_config: Callable[..., Path], destination: str
 ) -> None:
+    # A destination must never lead outside the organized folder
     config_path = write_config(f"hidden: '{destination}'\n")
 
     with pytest.raises(ConfigError, match=r"must stay inside|relative folder name"):
@@ -241,6 +254,7 @@ def test_destinations_outside_the_folder_are_rejected(
 def test_extensions_are_normalized(
     write_config: Callable[..., Path], written: str, normalized: str
 ) -> None:
+    # However it is written, an extension is stored as '.ext' in lowercase
     config_path = write_config(f"extensions:\n  {written}: Data\n")
 
     config = load_config(config_path)
@@ -258,6 +272,7 @@ def test_extensions_are_normalized(
 def test_invalid_extension_keys_are_rejected(
     write_config: Callable[..., Path], key: str, message: str
 ) -> None:
+    # An extension must be text, and not empty once normalized (cases above)
     config_path = write_config(f"extensions:\n  {key}: Data\n")
 
     with pytest.raises(ConfigError, match=re.escape(message)):
@@ -267,6 +282,7 @@ def test_invalid_extension_keys_are_rejected(
 def test_conflicting_extensions_are_rejected(
     write_config: Callable[..., Path],
 ) -> None:
+    # The same extension written twice cannot go to two different folders
     config_path = write_config(
         """
         extensions:
@@ -287,6 +303,7 @@ def test_conflicting_extensions_are_rejected(
 def test_duplicate_extensions_to_same_folder_are_merged(
     write_config: Callable[..., Path],
 ) -> None:
+    # The same extension written twice is fine when it goes to the same folder
     config_path = write_config(
         """
         extensions:
@@ -304,6 +321,7 @@ def test_duplicate_extensions_to_same_folder_are_merged(
 
 
 def test_mimetypes_are_lowercased(write_config: Callable[..., Path]) -> None:
+    # MIME types are stored in lowercase, as Magika reports them
     config_path = write_config(
         """
         mimetypes:
@@ -326,6 +344,7 @@ def test_mimetypes_are_lowercased(write_config: Callable[..., Path]) -> None:
 
 
 def test_all_errors_are_reported_at_once(write_config: Callable[..., Path]) -> None:
+    # Every problem is listed, in a fixed order, so that all can be fixed at once
     config_path = write_config(
         """
         ignore_system_files: "yes"
@@ -377,6 +396,7 @@ def test_all_errors_are_reported_at_once(write_config: Callable[..., Path]) -> N
 def test_default_config_path_uses_xdg_config_home(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    # Linux and macOS: $XDG_CONFIG_HOME when it is set
     xdg_path = tmp_path / "xdg-config"
     monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg_path))
     assert default_config_path() == xdg_path / "mimedy/config.yaml"
@@ -385,6 +405,7 @@ def test_default_config_path_uses_xdg_config_home(
 def test_default_config_path_ignores_relative_xdg_config_home(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    # The XDG spec says to ignore a relative value
     monkeypatch.setenv("XDG_CONFIG_HOME", "xdg-config")
     monkeypatch.setenv("HOME", str(tmp_path))
     assert default_config_path() == tmp_path / ".config/mimedy/config.yaml"
@@ -393,6 +414,7 @@ def test_default_config_path_ignores_relative_xdg_config_home(
 def test_default_config_path_falls_back_to_home_config(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    # Without XDG_CONFIG_HOME: ~/.config
     monkeypatch.delenv("XDG_CONFIG_HOME")
     monkeypatch.setenv("HOME", str(tmp_path))
     assert default_config_path() == tmp_path / ".config/mimedy/config.yaml"
@@ -401,6 +423,7 @@ def test_default_config_path_falls_back_to_home_config(
 def test_default_config_path_uses_appdata_on_windows(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    # Windows: %APPDATA% (Roaming), since the config follows the user
     appdata_path = tmp_path / "appdata"
     monkeypatch.setattr(sys, "platform", "win32")
     monkeypatch.setenv("APPDATA", str(appdata_path))
@@ -408,6 +431,7 @@ def test_default_config_path_uses_appdata_on_windows(
 
 
 def test_missing_explicit_config_is_an_error(tmp_path: Path) -> None:
+    # A file given explicitly must exist
     config_path = tmp_path / "config.yaml"
 
     with pytest.raises(ConfigError, match="Config file not found"):
@@ -415,12 +439,14 @@ def test_missing_explicit_config_is_an_error(tmp_path: Path) -> None:
 
 
 def test_missing_default_config_gives_defaults() -> None:
+    # No per-user config is the normal case: the defaults are used
     assert load_config() == Config()
 
 
 def test_default_config_is_loaded_when_present(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    # The per-user config is read when it exists
     xdg_path = tmp_path / "xdg-config"
     monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg_path))
     config_path = xdg_path / "mimedy/config.yaml"
