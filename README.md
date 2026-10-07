@@ -100,7 +100,7 @@ mimedy ~/Downloads --dry-run --verbose
 | `--install-completion` | Enable Tab completion of the options in your shell, detected automatically: bash, zsh, fish or PowerShell (once is enough). |
 | `--show-completion` | Print the completion script, to install it yourself (e.g. when your shell config is not in the usual location). |
 
-Only files directly inside the folder are processed. Existing subfolders are left untouched, so the tool can safely be run again.
+Only files directly inside the folder are processed. Existing subfolders are left untouched, so the tool can safely be run again. Subfolders are the only entries skipped without being listed: everything else that stays in place shows up as [ignored](#ignored-files) or skipped.
 
 | Exit code | Meaning |
 | :-: | :--- |
@@ -174,6 +174,11 @@ To organize them like any other file, turn this rule off:
 ```yaml
 ignore_system_files: false
 ```
+
+**Symbolic links and special files.** These are always left in place:
+
+- **Symbolic links**, whatever they point to. A link is never moved: a relative link would break once moved, and its target may not even be in the folder. Broken links and links to folders are listed too.
+- **Special files** that are neither files nor folders: named pipes, sockets, devices.
 
 **Your own patterns.** The `ignore` list adds patterns, matched against the whole file name and ignoring case: `*` stands for any run of characters, `?` for a single character, `[abc]` for one of the listed characters.
 
@@ -332,7 +337,7 @@ mimedy ~/Downloads --dry-run --verbose
 | `--install-completion` | Active l'autocomplétion des options avec Tab dans votre shell, détecté automatiquement : bash, zsh, fish ou PowerShell (une seule fois suffit). |
 | `--show-completion` | Affiche le script d'autocomplétion, pour l'installer vous-même (par exemple si votre configuration de shell n'est pas à l'emplacement habituel). |
 
-Seuls les fichiers situés directement dans le dossier sont traités. Les sous-dossiers existants ne sont pas touchés, ce qui permet de relancer l'outil sans risque.
+Seuls les fichiers situés directement dans le dossier sont traités. Les sous-dossiers existants ne sont pas touchés, ce qui permet de relancer l'outil sans risque. Ce sont les seuls éléments laissés de côté sans être signalés : tout ce qui reste en place apparaît comme [ignoré](#fichiers-ignorés) ou sauté.
 
 | Code de sortie | Signification |
 | :-: | :--- |
@@ -406,6 +411,11 @@ Pour les ranger comme les autres fichiers, désactivez cette règle :
 ```yaml
 ignore_system_files: false
 ```
+
+**Liens symboliques et fichiers spéciaux.** Ils restent toujours en place :
+
+- **Les liens symboliques**, quelle que soit leur cible. Un lien n'est jamais déplacé : un lien relatif serait cassé une fois déplacé, et sa cible n'est pas forcément dans le dossier. Les liens cassés et les liens vers des dossiers sont listés aussi.
+- **Les fichiers spéciaux**, qui ne sont ni des fichiers ni des dossiers : tubes nommés, sockets, périphériques.
 
 **Vos propres motifs.** La liste `ignore` ajoute des motifs, comparés au nom complet du fichier sans tenir compte de la casse : `*` remplace n'importe quelle suite de caractères, `?` un seul caractère, `[abc]` un caractère parmi ceux indiqués.
 

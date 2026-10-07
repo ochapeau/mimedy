@@ -1,5 +1,6 @@
 """Tests for planning the moves, then executing the plan."""
 
+import os
 from collections.abc import Callable
 from pathlib import Path
 
@@ -51,12 +52,15 @@ def test_empty_folder_gives_empty_plan(tmp_path: Path) -> None:
 def test_subfolders_are_not_planned(
     tmp_path: Path, make_file: Callable[..., Path]
 ) -> None:
-    # Only files directly in the folder are organized, never subfolders
+    # Only files directly in the folder are organized, never subfolders. As
+    # documented, they are not reported as ignored: that would only add noise,
+    # starting with the folders mimedy created itself
     make_file("Photos/photo.jpg")
 
     plan = plan_moves(tmp_path, FakeMagika(), Config())
 
-    assert plan.moves == []  # only files directly inside are planned
+    assert plan.moves == []
+    assert plan.ignored == []
     assert plan.failures == []
 
 
@@ -199,6 +203,65 @@ def test_ignore_patterns_match_the_whole_name(
     assert [move.source for move in plan.moves] == [report]
     assert plan.ignored == [Ignored(source=report_lock, reason="pattern ~$*")]
     assert plan.failures == []
+
+
+def test_symbolic_links_are_ignored(
+    tmp_path: Path, make_file: Callable[..., Path]
+) -> None:
+    # A link is never moved: a relative link would break once moved, and its
+    # target may not even be in the folder. Broken links and links to folders
+    # are ignored too, instead of being skipped silently
+    make_file("docs/real.pdf")
+    to_file = tmp_path / "to-file"
+    to_file.symlink_to("docs/real.pdf")  # relative link to a file
+    to_folder = tmp_path / "to-folder"
+    to_folder.symlink_to("docs")  # link to a folder
+    broken = tmp_path / "broken"
+    broken.symlink_to("nowhere")  # its target does not exist
+    magika = FakeMagika()
+
+    plan = plan_moves(tmp_path, magika, Config())
+
+    assert plan.moves == []
+    assert plan.ignored == [
+        Ignored(source=broken, reason="symbolic link"),
+        Ignored(source=to_file, reason="symbolic link"),
+        Ignored(source=to_folder, reason="symbolic link"),
+    ]
+    assert plan.failures == []
+    assert magika.calls == []
+
+
+def test_hidden_symbolic_link_is_ignored_too(
+    tmp_path: Path, make_file: Callable[..., Path]
+) -> None:
+    # The link check comes first: a hidden link is not sent to Hidden/
+    make_file("docs/notes.txt")
+    link = tmp_path / ".notes"
+    link.symlink_to("docs/notes.txt")
+
+    plan = plan_moves(tmp_path, FakeMagika(), Config())
+
+    assert plan.moves == []
+    assert plan.ignored == [
+        Ignored(source=link, reason="symbolic link"),
+    ]
+    assert plan.failures == []
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="needs Unix named pipes")
+def test_special_files_are_ignored(tmp_path: Path) -> None:
+    # A named pipe is neither a file nor a folder: it is reported as ignored,
+    # and never opened (reading a pipe would wait forever)
+    pipe = tmp_path / "pipe"
+    os.mkfifo(pipe)
+    magika = FakeMagika()
+
+    plan = plan_moves(tmp_path, magika, Config())
+
+    assert plan.moves == []
+    assert plan.ignored == [Ignored(source=pipe, reason="not a regular file")]
+    assert magika.calls == []
 
 
 # --- Blocked target folders -----------------------------------------------------

@@ -200,9 +200,22 @@ def plan_moves(
     reserved: set[Path] = set()
 
     for file in sorted(directory.iterdir()):
-        if not file.is_file():
+        # Links first: is_file() follows them, so a broken link or a link to a
+        # folder would be skipped silently, and a link to a file classified by
+        # its target, then moved as a link (a relative one breaks once moved)
+        if file.is_symlink():
+            plan.ignored.append(Ignored(file, "symbolic link"))
             continue
 
+        # Subfolders are never touched: that is documented, so they are the
+        # only entries skipped without being reported. Special files (named
+        # pipe, socket, device...) are reported as ignored
+        if not file.is_file():
+            if not file.is_dir():
+                plan.ignored.append(Ignored(file, "not a regular file"))
+            continue
+
+        # System files and the patterns of the config
         reason = ignore_reason(file, config)
         if reason is not None:
             plan.ignored.append(Ignored(file, reason))
