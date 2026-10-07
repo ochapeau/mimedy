@@ -62,6 +62,8 @@ mimedy is published on [PyPI](https://pypi.org/project/mimedy/) and requires Pyt
 uv tool install mimedy     # or: pipx install mimedy
 ```
 
+> ⚠️ mimedy is tested on macOS and Linux. Windows should work, but is not tested yet: feedback is welcome.
+
 To try it without installing anything:
 
 ```bash
@@ -135,7 +137,7 @@ ignore:                     # extra patterns, case-insensitive
 hidden: "Hidden"            # files starting with '.'
 
 large_files:
-  threshold_mb: 500         # decimal MB, like Finder or Explorer
+  threshold_mb: 500         # default 100, in decimal MB like Finder or Explorer
   target_dir: "Large"
 
 extensions:                 # exact extension match
@@ -200,12 +202,19 @@ The other files go through these rules, in this order; **the first match wins**:
 | # | Rule | Example |
 |:-:|:---|:---|
 | 1 | Hidden file | `.env` → `Hidden/` |
-| 2 | Large file | `movie.mkv` (2 GB) → `Large/` |
+| 2 | Large file (100 MB by default) | `movie.mkv` (2 GB) → `Large/` |
 | 3 | Extension | `scene.blend` → `Blender/` |
 | 4 | MIME type (Magika) | `invoice` *(PDF with no extension)* → `PDF/` |
 | 5 | Magika group | `script.py` → `Code/` |
 
 Rules 1 to 3 don't read file contents, so they are instant. Magika only runs when they aren't enough.
+
+**Extension or MIME type?** Both let you choose a specific folder, but they don't trust the same thing:
+
+- A **MIME type rule** trusts the content. `text/x-python: "Python"` catches every Python script, even one with no extension or a wrong one. Prefer it for anything Magika recognizes.
+- An **extension rule** trusts the name, and is a shortcut you choose: the file is never read. Use it for formats Magika cannot know (`.blend`, `.kra`), or when the extension is what matters to you (`.csv` and `.json` into `Data/`).
+
+Since extension rules come first, a PDF renamed to `report.csv` follows your `.csv` rule. Without that rule, Magika would see it for what it is.
 
 ### Project structure
 
@@ -299,6 +308,8 @@ mimedy est publié sur [PyPI](https://pypi.org/project/mimedy/) et nécessite Py
 uv tool install mimedy     # ou : pipx install mimedy
 ```
 
+> ⚠️ mimedy est testé sur macOS et Linux. Windows devrait fonctionner, mais n'est pas encore testé : vos retours sont les bienvenus.
+
 Pour l'essayer sans rien installer :
 
 ```bash
@@ -372,7 +383,7 @@ ignore:                     # motifs en plus, sans tenir compte de la casse
 hidden: "Hidden"            # fichiers commençant par '.'
 
 large_files:
-  threshold_mb: 500         # en Mo décimaux, comme le Finder ou l'Explorateur
+  threshold_mb: 500         # 100 par défaut, en Mo décimaux comme le Finder
   target_dir: "Large"
 
 extensions:                 # correspondance exacte sur l'extension
@@ -437,12 +448,19 @@ Les autres fichiers passent par ces règles, dans cet ordre ; **la première qui
 | # | Règle | Exemple |
 |:-:|:---|:---|
 | 1 | Fichier caché | `.env` → `Hidden/` |
-| 2 | Fichier volumineux | `film.mkv` (2 Go) → `Large/` |
+| 2 | Fichier volumineux (100 Mo par défaut) | `film.mkv` (2 Go) → `Large/` |
 | 3 | Extension | `scene.blend` → `Blender/` |
 | 4 | Type MIME (Magika) | `facture` *(PDF sans extension)* → `PDF/` |
 | 5 | Groupe Magika | `script.py` → `Code/` |
 
 Les règles 1 à 3 ne lisent pas le contenu des fichiers : elles sont instantanées. Magika n'est appelé que si elles ne suffisent pas.
+
+**Extension ou type MIME ?** Les deux permettent de choisir un dossier précis, mais elles ne se fient pas à la même chose :
+
+- Une **règle MIME** se fie au contenu. `text/x-python: "Python"` attrape tous les scripts Python, même sans extension ou avec une mauvaise. À privilégier pour tout ce que Magika reconnaît.
+- Une **règle d'extension** se fie au nom : c'est un raccourci que vous choisissez, et le fichier n'est jamais lu. À utiliser pour les formats que Magika ne peut pas connaître (`.blend`, `.kra`), ou quand c'est l'extension qui compte pour vous (`.csv` et `.json` dans `Data/`).
+
+Comme les règles d'extension passent en premier, un PDF renommé en `rapport.csv` suit votre règle `.csv`. Sans cette règle, Magika le reconnaîtrait pour ce qu'il est.
 
 ### Structure du projet
 

@@ -178,6 +178,24 @@ def test_invalid_config_exits_with_2(
     assert "did you mean" in result.output
 
 
+def test_invalid_default_config_does_not_mention_the_option(
+    downloads: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # Without --config, an error in the per-user config must not say "Invalid
+    # value for --config": the user never typed that option
+    xdg_path = tmp_path / "xdg-config"
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg_path))
+    config_path = xdg_path / "mimedy/config.yaml"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text("hiden: Dotfiles\n", encoding="utf-8")
+
+    result = runner.invoke(app, [str(downloads), "--yes"])
+
+    assert result.exit_code == 2  # Usage error: invalid config
+    assert "the config file" in result.output
+    assert "--config" not in result.output
+
+
 def test_unreadable_file_exits_with_1(
     downloads: Path,
     write_config: Callable[..., Path],

@@ -28,7 +28,7 @@ def write_config(tmp_path: Path) -> Callable[..., Path]:
 
     def write(text: str = "") -> Path:
         path = tmp_path / "config.yaml"
-        path.write_text(text)
+        path.write_text(text, encoding="utf-8")
         return path
 
     return write

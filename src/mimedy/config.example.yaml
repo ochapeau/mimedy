@@ -31,7 +31,7 @@ hidden: "Hidden"
 # Large files are moved aside before any content analysis.
 # Sizes are in decimal MB (1 MB = 1000 * 1000 bytes), like Finder/Explorer.
 large_files:
-  threshold_mb: 500
+  threshold_mb: 500  # default: 100
   target_dir: "Large"
 
 # Extension rules: use them for formats Magika cannot know about,

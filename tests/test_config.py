@@ -66,6 +66,31 @@ def test_unreadable_config_file_is_rejected(tmp_path: Path) -> None:
         load_config(tmp_path)
 
 
+def test_accented_config_is_read_as_utf8(
+    write_config: Callable[..., Path],
+) -> None:
+    # Config files are read as UTF-8 on every system. On macOS and Linux this
+    # already passed before the fix (UTF-8 is their default encoding): the test
+    # really guards Windows, where the default was cp1252 ("TÃ©lÃ©chargÃ©s")
+    config_path = write_config('hidden: "Téléchargés"\n')
+
+    config = load_config(config_path)
+
+    assert config.hidden == "Téléchargés"
+
+
+def test_config_not_saved_as_utf8_is_rejected(tmp_path: Path) -> None:
+    # Saved by an old Windows editor in cp1252: a clear error instead of a crash
+    config_path = tmp_path / "config.yaml"
+    config_path.write_bytes('hidden: "Téléchargés"\n'.encode("cp1252"))
+
+    with pytest.raises(ConfigError) as exc_info:
+        load_config(config_path)
+
+    message = str(exc_info.value)
+    assert "the file is not UTF-8 text, save it as UTF-8" in message
+
+
 # --- Unknown keys --------------------------------------------------------------
 
 

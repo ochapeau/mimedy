@@ -10,7 +10,7 @@ from pathlib import Path, PurePath
 from magika import Magika
 
 from mimedy.config import Config
-from mimedy.errors import ClassificationError
+from mimedy.errors import ClassificationError, describe_error
 
 logger = logging.getLogger("mimedy.organizer")
 
@@ -175,16 +175,6 @@ def ignore_reason(file: Path, config: Config) -> str | None:
         if fnmatchcase(name, pattern):
             return f"pattern {pattern}"
     return None
-
-
-def describe_error(e: Exception) -> str:
-    """Return a short reason, e.g. "Permission denied".
-
-    OSError messages otherwise look like "[Errno 13] Permission denied: '/path'".
-    """
-    if isinstance(e, OSError) and e.strerror:
-        return e.strerror
-    return str(e)
 
 
 def plan_moves(

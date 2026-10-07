@@ -16,7 +16,7 @@ from pathlib import Path, PurePath
 
 import yaml
 
-from mimedy.errors import ConfigError
+from mimedy.errors import ConfigError, describe_error
 
 logger = logging.getLogger("mimedy.config")
 
@@ -79,13 +79,16 @@ def read_yaml(config_path: Path) -> dict:
     not a mapping.
     """
     try:
-        with config_path.open() as f:
+        with config_path.open(encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
     except FileNotFoundError as e:
         msg = f"Config file not found: {config_path}"
         raise ConfigError(msg) from e
     except OSError as e:
-        msg = f"Cannot read {config_path}: {e.strerror}"
+        msg = f"Cannot read {config_path}: {describe_error(e)}"
+        raise ConfigError(msg) from e
+    except UnicodeDecodeError as e:
+        msg = f"Cannot read {config_path}: the file is not UTF-8 text, save it as UTF-8"
         raise ConfigError(msg) from e
     except yaml.YAMLError as e:
         msg = f"Invalid YAML in {config_path}: {e}"

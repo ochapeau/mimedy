@@ -27,6 +27,10 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    env:
+      # Makes Python warn about every file opened without encoding=, which
+      # pyproject.toml turns into a test failure (see filterwarnings)
+      PYTHONWARNDEFAULTENCODING: "1"
     strategy:
       # Run every version even if one fails, to see the whole picture
       fail-fast: false
