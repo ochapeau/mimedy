@@ -62,6 +62,8 @@ mimedy is published on [PyPI](https://pypi.org/project/mimedy/) and requires Pyt
 uv tool install mimedy     # or: pipx install mimedy
 ```
 
+> ⚠️ mimedy is tested on macOS and Linux. Windows should work, but is not tested yet: feedback is welcome.
+
 To try it without installing anything:
 
 ```bash
@@ -100,7 +102,7 @@ mimedy ~/Downloads --dry-run --verbose
 | `--install-completion` | Enable Tab completion of the options in your shell, detected automatically: bash, zsh, fish or PowerShell (once is enough). |
 | `--show-completion` | Print the completion script, to install it yourself (e.g. when your shell config is not in the usual location). |
 
-Only files directly inside the folder are processed. Existing subfolders are left untouched, so the tool can safely be run again.
+Only files directly inside the folder are processed. Existing subfolders are left untouched, so the tool can safely be run again. Subfolders are the only entries skipped without being listed: everything else that stays in place shows up as [ignored](#ignored-files) or skipped.
 
 | Exit code | Meaning |
 | :-: | :--- |
@@ -135,7 +137,7 @@ ignore:                     # extra patterns, case-insensitive
 hidden: "Hidden"            # files starting with '.'
 
 large_files:
-  threshold_mb: 500         # decimal MB, like Finder or Explorer
+  threshold_mb: 500         # default 100, in decimal MB like Finder or Explorer
   target_dir: "Large"
 
 extensions:                 # exact extension match
@@ -175,6 +177,11 @@ To organize them like any other file, turn this rule off:
 ignore_system_files: false
 ```
 
+**Symbolic links and special files.** These are always left in place:
+
+- **Symbolic links**, whatever they point to. A link is never moved: a relative link would break once moved, and its target may not even be in the folder. Broken links and links to folders are listed too.
+- **Special files** that are neither files nor folders: named pipes, sockets, devices.
+
 **Your own patterns.** The `ignore` list adds patterns, matched against the whole file name and ignoring case: `*` stands for any run of characters, `?` for a single character, `[abc]` for one of the listed characters.
 
 ```yaml
@@ -195,12 +202,19 @@ The other files go through these rules, in this order; **the first match wins**:
 | # | Rule | Example |
 |:-:|:---|:---|
 | 1 | Hidden file | `.env` → `Hidden/` |
-| 2 | Large file | `movie.mkv` (2 GB) → `Large/` |
+| 2 | Large file (100 MB by default) | `movie.mkv` (2 GB) → `Large/` |
 | 3 | Extension | `scene.blend` → `Blender/` |
 | 4 | MIME type (Magika) | `invoice` *(PDF with no extension)* → `PDF/` |
 | 5 | Magika group | `script.py` → `Code/` |
 
 Rules 1 to 3 don't read file contents, so they are instant. Magika only runs when they aren't enough.
+
+**Extension or MIME type?** Both let you choose a specific folder, but they don't trust the same thing:
+
+- A **MIME type rule** trusts the content. `text/x-python: "Python"` catches every Python script, even one with no extension or a wrong one. Prefer it for anything Magika recognizes.
+- An **extension rule** trusts the name, and is a shortcut you choose: the file is never read. Use it for formats Magika cannot know (`.blend`, `.kra`), or when the extension is what matters to you (`.csv` and `.json` into `Data/`).
+
+Since extension rules come first, a PDF renamed to `report.csv` follows your `.csv` rule. Without that rule, Magika would see it for what it is.
 
 ### Project structure
 
@@ -294,6 +308,8 @@ mimedy est publié sur [PyPI](https://pypi.org/project/mimedy/) et nécessite Py
 uv tool install mimedy     # ou : pipx install mimedy
 ```
 
+> ⚠️ mimedy est testé sur macOS et Linux. Windows devrait fonctionner, mais n'est pas encore testé : vos retours sont les bienvenus.
+
 Pour l'essayer sans rien installer :
 
 ```bash
@@ -332,7 +348,7 @@ mimedy ~/Downloads --dry-run --verbose
 | `--install-completion` | Active l'autocomplétion des options avec Tab dans votre shell, détecté automatiquement : bash, zsh, fish ou PowerShell (une seule fois suffit). |
 | `--show-completion` | Affiche le script d'autocomplétion, pour l'installer vous-même (par exemple si votre configuration de shell n'est pas à l'emplacement habituel). |
 
-Seuls les fichiers situés directement dans le dossier sont traités. Les sous-dossiers existants ne sont pas touchés, ce qui permet de relancer l'outil sans risque.
+Seuls les fichiers situés directement dans le dossier sont traités. Les sous-dossiers existants ne sont pas touchés, ce qui permet de relancer l'outil sans risque. Ce sont les seuls éléments laissés de côté sans être signalés : tout ce qui reste en place apparaît comme [ignoré](#fichiers-ignorés) ou sauté.
 
 | Code de sortie | Signification |
 | :-: | :--- |
@@ -367,7 +383,7 @@ ignore:                     # motifs en plus, sans tenir compte de la casse
 hidden: "Hidden"            # fichiers commençant par '.'
 
 large_files:
-  threshold_mb: 500         # en Mo décimaux, comme le Finder ou l'Explorateur
+  threshold_mb: 500         # 100 par défaut, en Mo décimaux comme le Finder
   target_dir: "Large"
 
 extensions:                 # correspondance exacte sur l'extension
@@ -407,6 +423,11 @@ Pour les ranger comme les autres fichiers, désactivez cette règle :
 ignore_system_files: false
 ```
 
+**Liens symboliques et fichiers spéciaux.** Ils restent toujours en place :
+
+- **Les liens symboliques**, quelle que soit leur cible. Un lien n'est jamais déplacé : un lien relatif serait cassé une fois déplacé, et sa cible n'est pas forcément dans le dossier. Les liens cassés et les liens vers des dossiers sont listés aussi.
+- **Les fichiers spéciaux**, qui ne sont ni des fichiers ni des dossiers : tubes nommés, sockets, périphériques.
+
 **Vos propres motifs.** La liste `ignore` ajoute des motifs, comparés au nom complet du fichier sans tenir compte de la casse : `*` remplace n'importe quelle suite de caractères, `?` un seul caractère, `[abc]` un caractère parmi ceux indiqués.
 
 ```yaml
@@ -427,12 +448,19 @@ Les autres fichiers passent par ces règles, dans cet ordre ; **la première qui
 | # | Règle | Exemple |
 |:-:|:---|:---|
 | 1 | Fichier caché | `.env` → `Hidden/` |
-| 2 | Fichier volumineux | `film.mkv` (2 Go) → `Large/` |
+| 2 | Fichier volumineux (100 Mo par défaut) | `film.mkv` (2 Go) → `Large/` |
 | 3 | Extension | `scene.blend` → `Blender/` |
 | 4 | Type MIME (Magika) | `facture` *(PDF sans extension)* → `PDF/` |
 | 5 | Groupe Magika | `script.py` → `Code/` |
 
 Les règles 1 à 3 ne lisent pas le contenu des fichiers : elles sont instantanées. Magika n'est appelé que si elles ne suffisent pas.
+
+**Extension ou type MIME ?** Les deux permettent de choisir un dossier précis, mais elles ne se fient pas à la même chose :
+
+- Une **règle MIME** se fie au contenu. `text/x-python: "Python"` attrape tous les scripts Python, même sans extension ou avec une mauvaise. À privilégier pour tout ce que Magika reconnaît.
+- Une **règle d'extension** se fie au nom : c'est un raccourci que vous choisissez, et le fichier n'est jamais lu. À utiliser pour les formats que Magika ne peut pas connaître (`.blend`, `.kra`), ou quand c'est l'extension qui compte pour vous (`.csv` et `.json` dans `Data/`).
+
+Comme les règles d'extension passent en premier, un PDF renommé en `rapport.csv` suit votre règle `.csv`. Sans cette règle, Magika le reconnaîtrait pour ce qu'il est.
 
 ### Structure du projet
 

@@ -22,14 +22,22 @@ class FakeResult:
 
 @dataclass
 class FakeMagika:
-    """Answer every identify_path() call with the same detection."""
+    """Answer every identify_path() call with the same detection.
+
+    Files named in unreadable fail instead, as the real Magika reports a file
+    it cannot read: ok=False and the status "permission_error".
+    """
 
     mime_type: str = "application/octet-stream"
     group: str = "unknown"
     ok: bool = True
     status: str = "ok"
+    unreadable: set[str] = field(default_factory=set)
     calls: list[Path] = field(default_factory=list)
 
     def identify_path(self, path: Path) -> FakeResult:
         self.calls.append(path)
+        if path.name in self.unreadable:
+            output = FakeOutput(self.mime_type, self.group)
+            return FakeResult(ok=False, status="permission_error", output=output)
         return FakeResult(self.ok, self.status, FakeOutput(self.mime_type, self.group))

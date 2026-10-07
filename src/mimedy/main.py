@@ -62,7 +62,10 @@ def init_config(value: bool) -> None:
 
     # Create the folder that holds the file (~/.config/mimedy), not the file itself
     target_config_path.parent.mkdir(parents=True, exist_ok=True)
-    target_config_path.write_text((files("mimedy") / "config.example.yaml").read_text())
+    target_config_path.write_text(
+        (files("mimedy") / "config.example.yaml").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
 
     typer.echo(f"Created config file: {target_config_path}")
     raise typer.Exit(EXIT_OK)
@@ -134,7 +137,8 @@ def main(  # noqa: PLR0913, PLR0917 (one parameter per CLI option)
         config = load_config(config_path)
     except ConfigError as e:
         # Reported by Typer as a usage error, with exit code 2
-        raise typer.BadParameter(str(e), param_hint="--config") from e
+        hint = "--config" if config_path is not None else "the config file"
+        raise typer.BadParameter(str(e), param_hint=hint) from e
 
     # Loading the Magika model is slow: do it once for all files
     magika = Magika()
