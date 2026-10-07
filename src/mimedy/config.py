@@ -62,7 +62,16 @@ class Config:
 
 
 def default_config_path() -> Path:
-    """Return the per-user config file: XDG on Linux and macOS, APPDATA on Windows."""
+    """Return the per-user config file.
+
+    - Linux and macOS: $XDG_CONFIG_HOME/mimedy/config.yaml, which is
+      ~/.config/mimedy/config.yaml by default
+    - Windows: %APPDATA%\\mimedy\\config.yaml, which is
+      C:\\Users\\<name>\\AppData\\Roaming\\mimedy\\config.yaml by default
+
+    The config is a user setting: on Windows it goes in Roaming, which follows
+    the user from one computer to another on a company network.
+    """
     if sys.platform == "win32":
         base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
     else:

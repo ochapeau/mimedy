@@ -31,7 +31,7 @@ def files_in(folder: Path) -> list[str]:
 
 
 # Always pass --config explicitly, so each test states the rules it relies on.
-# Without it, mimedy reads the per-user config: the isolate_user_config fixture
+# Without it, mimedy reads the per-user config: the isolate_user_dirs fixture
 # (conftest.py) points it to an empty folder, never to your own config.
 
 
