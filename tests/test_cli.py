@@ -10,6 +10,7 @@ from typer.testing import CliRunner
 
 from mimedy.config import default_config_path
 from mimedy.main import app, plural
+from tests.fakes import FakeMagika
 
 runner = CliRunner()
 
@@ -23,6 +24,17 @@ def downloads(tmp_path: Path) -> Path:
     folder = tmp_path / "downloads"
     folder.mkdir()
     return folder
+
+
+@pytest.fixture(autouse=True)
+def fixed_terminal_width(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Give Rich the same terminal width on every machine.
+
+    Typer shows usage errors in a Rich panel that wraps long lines at the
+    terminal width (COLUMNS, 80 by default). Fixed here, an exported COLUMNS
+    can no longer change where messages are cut, and so what the tests find.
+    """
+    monkeypatch.setenv("COLUMNS", "100")
 
 
 def files_in(folder: Path) -> list[str]:
@@ -154,25 +166,32 @@ def test_pdf_without_extension_is_detected_by_content(
 
 
 def test_missing_directory_exits_with_2(
-    tmp_path: Path, write_config: Callable[..., Path]
+    tmp_path: Path, write_config: Callable[..., Path], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Typer checks DIRECTORY before mimedy even starts
-    missing = tmp_path / "missing"  # tmp_path is new and empty: never exists
-    config_path = write_config()
+    # Typer checks DIRECTORY before mimedy even starts. Relative paths keep the
+    # message short and the same on every machine: an absolute temporary path
+    # made Rich cut "does not exist" on some machines (Docker)
+    monkeypatch.chdir(tmp_path)  # tmp_path is new and empty: "missing" never exists
+    write_config()
 
-    result = runner.invoke(app, [str(missing), "--config", str(config_path)])
+    result = runner.invoke(app, ["missing", "--config", "config.yaml"])
 
     assert result.exit_code == 2  # Usage error: invalid DIRECTORY argument
     assert "does not exist" in result.output
 
 
 def test_invalid_config_exits_with_2(
-    downloads: Path, write_config: Callable[..., Path]
+    downloads: Path,
+    write_config: Callable[..., Path],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
-    # A typo in the config stops mimedy before any move
-    config_path = write_config("extentions:\n  .csv: Data\n")
+    # A typo in the config stops mimedy before any move. The config is given by
+    # a relative path, to keep the message short (see the test above)
+    monkeypatch.chdir(tmp_path)
+    write_config("extentions:\n  .csv: Data\n")
 
-    result = runner.invoke(app, [str(downloads), "--config", str(config_path), "--yes"])
+    result = runner.invoke(app, [str(downloads), "--config", "config.yaml", "--yes"])
 
     assert result.exit_code == 2  # Usage error: invalid config
     assert "did you mean" in result.output
@@ -200,11 +219,15 @@ def test_unreadable_file_exits_with_1(
     downloads: Path,
     write_config: Callable[..., Path],
     caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # The only file cannot be read: it is skipped, nothing is moved
-    file = downloads / "document"
-    file.write_text("secret")
-    file.chmod(0)  # make the file unreadable
+    # The only file cannot be read: it is skipped, nothing is moved. The fake
+    # Magika fails on it: chmod(0) does not stop root (Docker) nor Windows
+    document = downloads / "document"
+    document.write_text("secret")
+    # Replace the name Magika where main.py uses it, not in the magika package
+    fake = FakeMagika(unreadable={document.name})
+    monkeypatch.setattr("mimedy.main.Magika", lambda: fake)
     config_path = write_config()
 
     result = runner.invoke(app, [str(downloads), "--config", str(config_path), "--yes"])
@@ -217,13 +240,15 @@ def test_failure_after_moving_exits_with_1(
     downloads: Path,
     write_config: Callable[..., Path],
     caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Unlike the test above, one file can be moved: mimedy goes on to move it,
     # then still reports the unreadable one with the exit code
-    file = downloads / "document"
-    file.write_text("secret")
-    file.chmod(0)  # make the file unreadable
-    (downloads / "data.csv").write_text("a,b\n1,2\n")
+    document = downloads / "document"
+    document.write_text("secret")
+    fake = FakeMagika(unreadable={document.name})
+    monkeypatch.setattr("mimedy.main.Magika", lambda: fake)
+    (downloads / "data.csv").write_text("a,b\n1,2\n")  # goes to Data/ by extension
     config_path = write_config("extensions:\n  .csv: Data\n")
 
     result = runner.invoke(app, [str(downloads), "--config", str(config_path), "--yes"])
@@ -277,12 +302,13 @@ def test_config_is_read_from_default_location_without_option(
 
 
 def test_missing_config_option_file_exits_with_2(
-    downloads: Path, tmp_path: Path
+    downloads: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # A file given with --config must exist, unlike the default one
-    config_path = tmp_path / "missing.yaml"
+    # A file given with --config must exist, unlike the default one. Relative
+    # path: a short message, the same on every machine
+    monkeypatch.chdir(tmp_path)
 
-    result = runner.invoke(app, [str(downloads), "--config", str(config_path), "--yes"])
+    result = runner.invoke(app, [str(downloads), "--config", "missing.yaml", "--yes"])
 
     assert result.exit_code == 2  # Usage error: the --config file is missing
     assert "Config file not found" in result.output

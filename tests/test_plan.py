@@ -211,11 +211,11 @@ def test_symbolic_links_are_ignored(
     # A link is never moved: a relative link would break once moved, and its
     # target may not even be in the folder. Broken links and links to folders
     # are ignored too, instead of being skipped silently
-    make_file("docs/real.pdf")
+    real = make_file("docs/real.pdf")
     to_file = tmp_path / "to-file"
-    to_file.symlink_to("docs/real.pdf")  # relative link to a file
+    to_file.symlink_to(real.relative_to(tmp_path))  # relative link to a file
     to_folder = tmp_path / "to-folder"
-    to_folder.symlink_to("docs")  # link to a folder
+    to_folder.symlink_to(real.parent.relative_to(tmp_path))  # link to a folder
     broken = tmp_path / "broken"
     broken.symlink_to("nowhere")  # its target does not exist
     magika = FakeMagika()
@@ -236,9 +236,9 @@ def test_hidden_symbolic_link_is_ignored_too(
     tmp_path: Path, make_file: Callable[..., Path]
 ) -> None:
     # The link check comes first: a hidden link is not sent to Hidden/
-    make_file("docs/notes.txt")
+    notes = make_file("docs/notes.txt")
     link = tmp_path / ".notes"
-    link.symlink_to("docs/notes.txt")
+    link.symlink_to(notes.relative_to(tmp_path))  # relative link
 
     plan = plan_moves(tmp_path, FakeMagika(), Config())
 
@@ -324,10 +324,10 @@ def test_file_blocks_the_folder_whatever_the_case(
 ) -> None:
     # On a case-insensitive disk (macOS by default), a file "data" takes the
     # name of the folder Data/. The test only makes sense on such a disk
-    make_file("probe")
-    if not (tmp_path / "PROBE").exists():
+    probe = make_file("probe")
+    if not (tmp_path / probe.name.upper()).exists():
         pytest.skip("this disk is case-sensitive")
-    (tmp_path / "probe").unlink()
+    probe.unlink()
 
     blocker = make_file("data")
     table = make_file("a.csv")
@@ -387,19 +387,19 @@ def test_target_appeared_since_planning_is_a_failure(
     tmp_path: Path, make_file: Callable[..., Path]
 ) -> None:
     # The plan promised this exact target: never overwrite or rename it
-    make_file("data.csv")
+    data = make_file("data.csv")
     config = Config(extensions={".csv": "Data"})
     plan = plan_moves(tmp_path, FakeMagika(), config)
 
     # Between planning and execution, another file takes the target name
-    intruder = make_file("Data/data.csv")
+    intruder = make_file(f"Data/{data.name}")
     intruder.write_text("someone else")
 
     failures = execute(plan)
 
-    assert [failure.source.name for failure in failures] == ["data.csv"]
+    assert [failure.source for failure in failures] == [data]
     assert intruder.read_text() == "someone else"  # never overwritten
-    assert (tmp_path / "data.csv").exists()  # the source did not move
+    assert data.exists()  # the source did not move
 
 
 def test_vanished_source_is_a_failure_and_others_are_moved(
@@ -443,6 +443,21 @@ def test_unique_path_counts_up(tmp_path: Path, make_file: Callable[..., Path]) -
         unique_path(tmp_path / "photo.jpg", reserved=set())
         == tmp_path / "photo (2).jpg"
     )
+
+
+def test_fake_magika_only_fails_on_unreadable_files(
+    tmp_path: Path, make_file: Callable[..., Path]
+) -> None:
+    # The fake replaces chmod(0) in the CLI tests: it must fail on the named
+    # files only, the way the real Magika reports a file it cannot read
+    secret = make_file("secret")
+    other = make_file("other")
+    magika = FakeMagika(unreadable={secret.name})
+
+    failed = magika.identify_path(secret)
+    assert failed.ok is False
+    assert failed.status == "permission_error"  # the real Magika's status
+    assert magika.identify_path(other).ok is True
 
 
 @pytest.mark.parametrize(
