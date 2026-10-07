@@ -18,7 +18,11 @@ from pathlib import Path
 from types import TracebackType
 from typing import IO
 
-from mimedy.errors import InvalidJournalLineError, UnreadableJournalError
+from mimedy.errors import (
+    InvalidJournalLineError,
+    UnreadableJournalError,
+    describe_error,
+)
 
 JOURNAL_VERSION = 1
 
@@ -175,7 +179,7 @@ def read_journal(path: Path) -> Journal | None:
     except FileNotFoundError:
         return None  # No journal: nothing to undo, not an error
     except OSError as e:
-        raise UnreadableJournalError(path, e.strerror or str(e)) from e
+        raise UnreadableJournalError(path, describe_error(e)) from e
 
     # 2. Every complete line ends with "\n". What follows the last "\n" is
     #    either "" or a line cut by a crash: it is dropped in both cases
