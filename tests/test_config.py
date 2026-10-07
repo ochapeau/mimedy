@@ -476,7 +476,7 @@ def test_default_config_is_loaded_when_present(
     monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg_path))
     config_path = xdg_path / "mimedy/config.yaml"
     config_path.parent.mkdir(parents=True)
-    config_path.write_text("extensions:\n  .csv: Data\n")
+    config_path.write_text("extensions:\n  .csv: Data\n", encoding="utf-8")
     assert load_config() == Config(extensions={".csv": "Data"})
 
 

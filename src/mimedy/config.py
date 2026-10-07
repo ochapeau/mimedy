@@ -100,7 +100,7 @@ def read_yaml(config_path: Path) -> dict:
         msg = f"Cannot read {config_path}: the file is not UTF-8 text, save it as UTF-8"
         raise ConfigError(msg) from e
     except yaml.YAMLError as e:
-        msg = f"Invalid YAML in {config_path}: {e}"
+        msg = f"Invalid YAML in {config_path}: {describe_error(e)}"
         raise ConfigError(msg) from e
 
     if not isinstance(data, dict):

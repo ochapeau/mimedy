@@ -56,7 +56,7 @@ def test_dry_run_moves_nothing(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     # --dry-run shows the plan and stops there: no file moves
-    (downloads / "data.csv").write_text("a,b\n1,2\n")
+    (downloads / "data.csv").write_text("a,b\n1,2\n", encoding="utf-8")
     config_path = write_config("extensions:\n  .csv: Data\n")
 
     result = runner.invoke(
@@ -73,7 +73,7 @@ def test_declined_confirmation_moves_nothing(
     downloads: Path, write_config: Callable[..., Path]
 ) -> None:
     # Without --yes, mimedy asks first: answering no moves nothing
-    (downloads / "data.csv").write_text("a,b\n1,2\n")
+    (downloads / "data.csv").write_text("a,b\n1,2\n", encoding="utf-8")
     config_path = write_config("extensions:\n  .csv: Data\n")
 
     # input= is what the user types at the "Move 1 file? [y/N]" prompt
@@ -90,7 +90,7 @@ def test_accepted_confirmation_moves_files(
     downloads: Path, write_config: Callable[..., Path]
 ) -> None:
     # Answering yes at the prompt performs the plan
-    (downloads / "data.csv").write_text("a,b\n1,2\n")
+    (downloads / "data.csv").write_text("a,b\n1,2\n", encoding="utf-8")
     config_path = write_config("extensions:\n  .csv: Data\n")
 
     # input= is what the user types at the "Move 1 file? [y/N]" prompt
@@ -107,7 +107,7 @@ def test_yes_moves_files_without_asking(
     downloads: Path, write_config: Callable[..., Path]
 ) -> None:
     # --yes skips the question, e.g. in a script
-    (downloads / "data.csv").write_text("a,b\n1,2\n")
+    (downloads / "data.csv").write_text("a,b\n1,2\n", encoding="utf-8")
     config_path = write_config("extensions:\n  .csv: Data\n")
 
     result = runner.invoke(app, [str(downloads), "--config", str(config_path), "--yes"])
@@ -127,7 +127,7 @@ def test_verbose_lists_ignored_files(
 ) -> None:
     # Ignored files only show with --verbose, but the summary always counts them
     (downloads / ".DS_Store").write_bytes(b"\x00\x00\x00\x01Bud1")
-    (downloads / "data.csv").write_text("a,b\n1,2\n")
+    (downloads / "data.csv").write_text("a,b\n1,2\n", encoding="utf-8")
     config_path = write_config("extensions:\n  .csv: Data\n")
 
     result = runner.invoke(
@@ -224,7 +224,7 @@ def test_unreadable_file_exits_with_1(
     # The only file cannot be read: it is skipped, nothing is moved. The fake
     # Magika fails on it: chmod(0) does not stop root (Docker) nor Windows
     document = downloads / "document"
-    document.write_text("secret")
+    document.write_text("secret", encoding="utf-8")
     # Replace the name Magika where main.py uses it, not in the magika package
     fake = FakeMagika(unreadable={document.name})
     monkeypatch.setattr("mimedy.main.Magika", lambda: fake)
@@ -245,10 +245,12 @@ def test_failure_after_moving_exits_with_1(
     # Unlike the test above, one file can be moved: mimedy goes on to move it,
     # then still reports the unreadable one with the exit code
     document = downloads / "document"
-    document.write_text("secret")
+    document.write_text("secret", encoding="utf-8")
     fake = FakeMagika(unreadable={document.name})
     monkeypatch.setattr("mimedy.main.Magika", lambda: fake)
-    (downloads / "data.csv").write_text("a,b\n1,2\n")  # goes to Data/ by extension
+    (downloads / "data.csv").write_text(
+        "a,b\n1,2\n", encoding="utf-8"
+    )  # goes to Data/ by extension
     config_path = write_config("extensions:\n  .csv: Data\n")
 
     result = runner.invoke(app, [str(downloads), "--config", str(config_path), "--yes"])
@@ -267,8 +269,10 @@ def test_blocked_target_folder_is_reported_before_moving(
     # The reported bug: Magika detects "Code" and j.json as code, so both go to
     # Code/, a name taken by the file "Code" itself. The plan must show them as
     # skipped, instead of announcing moves that then fail
-    (downloads / "Code").write_text("def f():\n    return 1\n\nclass A:\n    pass\n")
-    (downloads / "j.json").write_text('{"a": 1, "b": [1, 2, 3]}\n')
+    (downloads / "Code").write_text(
+        "def f():\n    return 1\n\nclass A:\n    pass\n", encoding="utf-8"
+    )
+    (downloads / "j.json").write_text('{"a": 1, "b": [1, 2, 3]}\n', encoding="utf-8")
     config_path = write_config()
 
     result = runner.invoke(app, [str(downloads), "--config", str(config_path), "--yes"])
@@ -291,8 +295,8 @@ def test_config_is_read_from_default_location_without_option(
     monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg_path))
     config_path = xdg_path / "mimedy/config.yaml"
     config_path.parent.mkdir(parents=True)
-    config_path.write_text("extensions:\n  .csv: Data\n")
-    (downloads / "data.csv").write_text("a,b\n1,2\n")
+    config_path.write_text("extensions:\n  .csv: Data\n", encoding="utf-8")
+    (downloads / "data.csv").write_text("a,b\n1,2\n", encoding="utf-8")
 
     result = runner.invoke(app, [str(downloads), "--yes"])
 
@@ -346,10 +350,9 @@ def test_init_config_creates_the_example_at_the_default_location() -> None:
     result = runner.invoke(app, ["--init-config"])
 
     assert result.exit_code == 0  # Success
-    assert (
-        default_config_path().read_text()
-        == (files("mimedy") / "config.example.yaml").read_text()
-    )
+    assert default_config_path().read_text(encoding="utf-8") == (
+        files("mimedy") / "config.example.yaml"
+    ).read_text(encoding="utf-8")
 
 
 def test_init_config_never_overwrites_an_existing_config() -> None:
@@ -357,9 +360,9 @@ def test_init_config_never_overwrites_an_existing_config() -> None:
     config_path = default_config_path()
     content = "extensions:\n  .csv: Data\n"
     config_path.parent.mkdir(parents=True)
-    config_path.write_text(content)
+    config_path.write_text(content, encoding="utf-8")
 
     result = runner.invoke(app, ["--init-config"])
 
     assert result.exit_code == 1  # Refused: an existing config is never overwritten
-    assert config_path.read_text() == content
+    assert config_path.read_text(encoding="utf-8") == content

@@ -108,7 +108,7 @@ def test_each_line_is_written_right_away(tmp_path: Path) -> None:
     with JournalWriter(path, DOWNLOADS) as writer:
         writer.record_move(DOWNLOADS / "invoice", DOWNLOADS / "PDF/invoice")
 
-        lines = path.read_text().splitlines(keepends=True)
+        lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
         assert len(lines) == 2  # header + move
         assert '"source"' in lines[1]
         assert lines[1].endswith("\n")  # complete, not cut
@@ -145,7 +145,7 @@ def test_truncated_last_line_is_ignored(tmp_path: Path) -> None:
     # A crash cut the second move in the middle (no final "\n"): the complete
     # move before it is still read, so the run can be undone
     path = tmp_path / "journal.jsonl"
-    path.write_text(HEADER + MOVE + '{"source": "/home/me/Downl')
+    path.write_text(HEADER + MOVE + '{"source": "/home/me/Downl', encoding="utf-8")
 
     journal = read_journal(path)
 
@@ -157,7 +157,7 @@ def test_truncated_last_line_is_ignored(tmp_path: Path) -> None:
 def test_invalid_line_in_the_middle_is_an_error(tmp_path: Path) -> None:
     # A broken line 2, followed by a valid line 3: not a crash, a damaged file
     path = tmp_path / "journal.jsonl"
-    path.write_text(HEADER + "not json\n" + MOVE)
+    path.write_text(HEADER + "not json\n" + MOVE, encoding="utf-8")
 
     with pytest.raises(InvalidJournalLineError) as exc_info:
         read_journal(path)
@@ -197,7 +197,7 @@ def test_invalid_journal_lines_are_rejected(
 ) -> None:
     # Any line that mimedy would not write is refused, with its line number
     path = tmp_path / "journal.jsonl"
-    path.write_text(text)
+    path.write_text(text, encoding="utf-8")
 
     with pytest.raises(InvalidJournalLineError) as exc_info:
         read_journal(path)
@@ -207,7 +207,7 @@ def test_invalid_journal_lines_are_rejected(
 def test_empty_journal_is_unreadable(tmp_path: Path) -> None:
     # Not even a header: there is nothing to check the rest against
     path = tmp_path / "journal.jsonl"
-    path.write_text("")
+    path.write_text("", encoding="utf-8")
 
     with pytest.raises(UnreadableJournalError):
         read_journal(path)
