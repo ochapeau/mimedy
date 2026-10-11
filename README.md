@@ -19,7 +19,7 @@
 
 ## 🇬🇧 English
 
-**Contents:** [Why](#why) · [Features](#features) · [Installation](#installation) · [Usage](#usage) · [Configuration](#configuration) · [Ignored files](#ignored-files) · [How is a file classified](#how-is-a-file-classified) · [Project structure](#project-structure) · [Development](#development) · [Roadmap](#roadmap) · [License](#license)
+**Contents:** [Why](#why) · [Features](#features) · [Installation](#installation) · [Usage](#usage) · [Configuration](#configuration) · [Ignored files](#ignored-files) · [How is a file classified](#how-is-a-file-classified) · [Undoing a run](#undoing-a-run) · [Project structure](#project-structure) · [Development](#development) · [Roadmap](#roadmap) · [License](#license)
 
 ### Why?
 
@@ -51,6 +51,7 @@ Move 5 files? [y/N]: y
 - 🧯 **Robust**: an unreadable or locked file is reported and skipped, without stopping the run.
 - 🙈 **System files ignored**: `.DS_Store`, `Thumbs.db`… stay where they are, and you can add your own patterns (`*.part`).
 - 🛡️ **Never overwrites**: if `photo.jpg` already exists, the new file becomes `photo (1).jpg`.
+- ↩️ **Undo**: `--undo` moves the files of the last run back, and refuses rather than guesses when something changed since.
 - 🐛 **`--verbose` mode**: shows which rule decided each file's destination.
 - ⚙️ **Simple YAML configuration**, entirely optional.
 
@@ -88,6 +89,12 @@ mimedy ~/Downloads --yes --config my-config.yaml
 
 # Understand why a file goes where it goes
 mimedy ~/Downloads --dry-run --verbose
+
+# Organize the folder you are in
+mimedy .
+
+# Move the files of the last run back
+mimedy ~/Downloads --undo
 ```
 
 | Option | Description |
@@ -98,6 +105,7 @@ mimedy ~/Downloads --dry-run --verbose
 | `--yes`, `-y` | Move without asking for confirmation. |
 | `--verbose`, `-v` | Show which rule applied to each file, and the ignored files. |
 | `--lowercase`, `-l` | Keep folders named after Magika groups lowercase (`video/` instead of `Video/`). |
+| `--undo`, `-u` | Move the files of the last run back (see [Undoing a run](#undoing-a-run)). |
 | `--version`, `-V` | Show the version. |
 | `--help`, `-h` | Show the help. |
 | `--init-config` | Create a commented example config at the default location (never overwrites an existing one). |
@@ -109,7 +117,7 @@ Only files directly inside the folder are processed. Existing subfolders are lef
 | Exit code | Meaning |
 | :-: | :--- |
 | `0` | Everything went fine, or there was nothing to organize. |
-| `1` | At least one file could not be processed, or the confirmation was declined. |
+| `1` | At least one file could not be processed, the confirmation was declined, or the journal of `--undo` cannot be trusted. |
 | `2` | Invalid arguments or configuration. |
 
 ### Configuration
@@ -218,6 +226,48 @@ Rules 1 to 3 don't read file contents, so they are instant. Magika only runs whe
 
 Since extension rules come first, a PDF renamed to `report.csv` follows your `.csv` rule. Without that rule, Magika would see it for what it is.
 
+### Undoing a run
+
+Changed your mind? `--undo` moves the files of the last run back where they were:
+
+```bash
+mimedy ~/Downloads --undo             # show the moves back, then confirm
+mimedy ~/Downloads --undo --dry-run   # only show them
+```
+
+```text
+$ mimedy ~/Downloads --undo
+[INFO] Undoing the last run in /Users/me/Downloads
+[INFO] 'PDF/invoice' → invoice
+[INFO] 'PDF/report (1).pdf' → report.pdf
+[INFO] 2 files to move back, 0 skipped
+Move back 2 files? [y/N]: y
+[INFO] Done: 2 moved back, 0 failed, 1 empty folder removed
+```
+
+**How it works.** Every real run writes a journal of its moves as they happen, so even an interrupted run can be undone. Each organized folder has its own journal, which only keeps its **last run**: `--dry-run`, a declined confirmation or an empty plan leave it untouched. Journals live outside the organized folder, in `~/.local/state/mimedy/` (`$XDG_STATE_HOME`) on Linux and macOS, and `%LOCALAPPDATA%\mimedy` on Windows. Set `XDG_STATE_HOME` to keep them elsewhere, as for every application following this standard. The undo loads neither the configuration nor Magika: it is instant, and a configuration changed since the run cannot prevent it.
+
+- Files go back **newest first**, under their **original name**: a file renamed `report (1).pdf` to avoid a collision becomes `report.pdf` again.
+- Folders created by mimedy are removed **when empty**, deepest first. A folder holding only system files (a `.DS_Store` written by the Finder…) counts as empty. A folder that existed before the run is never touched.
+- After a complete undo, the journal is deleted: a second `--undo` has nothing to undo.
+
+**Safety first: refuse rather than guess.** An undo never overwrites, never renames, and never moves a file it is not sure about:
+
+| Situation | What `--undo` does |
+| :--- | :--- |
+| A file is no longer where mimedy put it (deleted or moved since) | Reported and skipped, then forgotten: it could never go back |
+| Another file now takes the original place | Reported and skipped, never overwritten. It stays in the journal: free the place, then run `--undo` again |
+| The journal is damaged | Nothing is moved: an error, and exit code `1` |
+| The journal was written for another folder | Refused, nothing is moved, exit code `1` |
+| `--config` or `--lowercase` given with `--undo` | Refused, since they only mean something when organizing: exit code `2` |
+
+**Known limits.** The journal is found from the path of the folder. When that path changes, the undo finds no journal and reports `Nothing to undo`: it never moves anything to the wrong place.
+
+- The folder was renamed or moved since the run.
+- On Linux, after a change of system language, `xdg-user-dirs` may rename `~/Downloads` to the new language (`~/Téléchargements`). On macOS and Windows, only the displayed name is translated (`.localized`, `desktop.ini`): the real path stays the same.
+- On macOS, the disk ignores case: `~/downloads` and `~/Downloads` are the same folder, but two different paths. Use the same spelling as for the run.
+- Only the last run of a folder can be undone.
+
 ### Project structure
 
 ```text
@@ -228,8 +278,10 @@ mimedy/
 │   ├── config.py            # Configuration loading and validation
 │   ├── config.example.yaml  # Commented example configuration
 │   ├── organizer.py         # Classification rules, planning and moves
+│   ├── journal.py           # Journal of the moves of a run
+│   ├── undo.py              # Undo of the last run, from its journal
 │   └── errors.py            # Project exceptions
-└── tests/                   # pytest tests (configuration, rules, plan, CLI)
+└── tests/                   # pytest tests (configuration, rules, plan, journal, undo, CLI)
 ```
 
 ### Development
@@ -253,7 +305,7 @@ uv run mimedy --help        # run the development version
 - [x] Publish on PyPI (`uv tool install mimedy`)
 - [x] Ignore system files (`.DS_Store`, `.localized`, `Thumbs.db`, `desktop.ini`…), with an option to organize them anyway
 - [x] File patterns to ignore (downloads in progress: `*.part`, `*.crdownload`…)
-- [ ] Undo the last run (`--undo`)
+- [x] Undo the last run (`--undo`)
 - [ ] Homebrew install (`brew install ochapeau/tap/mimedy`), once Magika ships its upcoming Rust engine: Homebrew builds Python dependencies from source, and today's `onnxruntime` dependency only exists as prebuilt wheels
 - [ ] Optional terminal interface (TUI)
 
@@ -267,7 +319,7 @@ Released under the MIT License. See [LICENSE](LICENSE).
 
 ## 🇫🇷 Français
 
-**Sommaire :** [Pourquoi](#pourquoi-) · [Fonctionnalités](#fonctionnalités) · [Installation](#installation-1) · [Utilisation](#utilisation) · [Configuration](#configuration-1) · [Fichiers ignorés](#fichiers-ignorés) · [Comment un fichier est-il classé](#comment-un-fichier-est-il-classé-) · [Structure du projet](#structure-du-projet) · [Développement](#développement) · [Feuille de route](#feuille-de-route) · [Licence](#licence)
+**Sommaire :** [Pourquoi](#pourquoi-) · [Fonctionnalités](#fonctionnalités) · [Installation](#installation-1) · [Utilisation](#utilisation) · [Configuration](#configuration-1) · [Fichiers ignorés](#fichiers-ignorés) · [Comment un fichier est-il classé](#comment-un-fichier-est-il-classé-) · [Annuler un rangement](#annuler-un-rangement) · [Structure du projet](#structure-du-projet) · [Développement](#développement) · [Feuille de route](#feuille-de-route) · [Licence](#licence)
 
 ### Pourquoi ?
 
@@ -299,6 +351,7 @@ Move 5 files? [y/N]: y
 - 🧯 **Robuste** : un fichier illisible ou verrouillé est signalé et ignoré, sans interrompre le rangement.
 - 🙈 **Fichiers système ignorés** : `.DS_Store`, `Thumbs.db`… restent à leur place, et vous pouvez ajouter vos propres motifs (`*.part`).
 - 🛡️ **Aucun écrasement** : si `photo.jpg` existe déjà, le nouveau fichier devient `photo (1).jpg`.
+- ↩️ **Annulation** : `--undo` remet à leur place les fichiers du dernier rangement, et refuse plutôt que de deviner si quelque chose a changé depuis.
 - 🐛 **Mode `--verbose`** : indique pour chaque fichier la règle qui a décidé de sa destination.
 - ⚙️ **Configuration YAML** simple, entièrement facultative.
 
@@ -336,6 +389,12 @@ mimedy ~/Downloads --yes --config my-config.yaml
 
 # Comprendre pourquoi un fichier va à tel endroit
 mimedy ~/Downloads --dry-run --verbose
+
+# Ranger le dossier où vous êtes
+mimedy .
+
+# Remettre à leur place les fichiers du dernier rangement
+mimedy ~/Downloads --undo
 ```
 
 | Option | Description |
@@ -346,6 +405,7 @@ mimedy ~/Downloads --dry-run --verbose
 | `--yes`, `-y` | Déplace sans demander de confirmation. |
 | `--verbose`, `-v` | Affiche la règle appliquée à chaque fichier, et les fichiers ignorés. |
 | `--lowercase`, `-l` | Garde en minuscules les dossiers nommés d'après Magika (`video/` au lieu de `Video/`). |
+| `--undo`, `-u` | Remet à leur place les fichiers du dernier rangement (voir [Annuler un rangement](#annuler-un-rangement)). |
 | `--version`, `-V` | Affiche la version. |
 | `--help`, `-h` | Affiche l'aide. |
 | `--init-config` | Crée une configuration d'exemple commentée à l'emplacement par défaut (sans jamais écraser une configuration existante). |
@@ -357,7 +417,7 @@ Seuls les fichiers situés directement dans le dossier sont traités. Les sous-d
 | Code de sortie | Signification |
 | :-: | :--- |
 | `0` | Tout s'est bien passé, ou il n'y avait rien à ranger. |
-| `1` | Au moins un fichier n'a pas pu être traité, ou la confirmation a été refusée. |
+| `1` | Au moins un fichier n'a pas pu être traité, la confirmation a été refusée, ou le journal de `--undo` n'est pas fiable. |
 | `2` | Arguments ou configuration invalides. |
 
 ### Configuration
@@ -466,6 +526,48 @@ Les règles 1 à 3 ne lisent pas le contenu des fichiers : elles sont instantan�
 
 Comme les règles d'extension passent en premier, un PDF renommé en `rapport.csv` suit votre règle `.csv`. Sans cette règle, Magika le reconnaîtrait pour ce qu'il est.
 
+### Annuler un rangement
+
+Changé d'avis ? `--undo` remet les fichiers du dernier rangement à leur place :
+
+```bash
+mimedy ~/Downloads --undo             # afficher les retours, puis confirmer
+mimedy ~/Downloads --undo --dry-run   # seulement les afficher
+```
+
+```text
+$ mimedy ~/Downloads --undo
+[INFO] Undoing the last run in /Users/me/Downloads
+[INFO] 'PDF/invoice' → invoice
+[INFO] 'PDF/report (1).pdf' → report.pdf
+[INFO] 2 files to move back, 0 skipped
+Move back 2 files? [y/N]: y
+[INFO] Done: 2 moved back, 0 failed, 1 empty folder removed
+```
+
+**Comment ça marche.** Chaque vrai rangement écrit un journal de ses déplacements au fur et à mesure : même un rangement interrompu peut être annulé. Chaque dossier rangé a son propre journal, qui ne garde que son **dernier rangement** : `--dry-run`, une confirmation refusée ou un plan vide le laissent intact. Les journaux sont rangés hors du dossier, dans `~/.local/state/mimedy/` (`$XDG_STATE_HOME`) sous Linux et macOS, et dans `%LOCALAPPDATA%\mimedy` sous Windows. Définissez `XDG_STATE_HOME` pour les ranger ailleurs, comme pour toutes les applications qui suivent cette norme. L'annulation ne charge ni la configuration ni Magika : elle est instantanée, et une configuration modifiée depuis ne peut pas l'empêcher.
+
+- Les fichiers reviennent **du plus récent au plus ancien**, sous leur **nom d'origine** : un fichier renommé `report (1).pdf` pour éviter une collision redevient `report.pdf`.
+- Les dossiers créés par mimedy sont supprimés **s'ils sont vides**, du plus profond au plus haut. Un dossier qui ne contient que des fichiers système (un `.DS_Store` écrit par le Finder…) compte comme vide. Un dossier qui existait avant le rangement n'est jamais touché.
+- Après une annulation complète, le journal est supprimé : un second `--undo` n'a plus rien à annuler.
+
+**La sécurité d'abord : refuser plutôt que deviner.** Une annulation n'écrase jamais, ne renomme jamais, et ne déplace jamais un fichier dont elle n'est pas sûre :
+
+| Situation | Ce que fait `--undo` |
+| :--- | :--- |
+| Un fichier n'est plus là où mimedy l'avait mis (supprimé ou déplacé depuis) | Signalé et sauté, puis oublié : il ne pourrait jamais revenir |
+| Un autre fichier occupe maintenant la place d'origine | Signalé et sauté, jamais écrasé. Il reste dans le journal : libérez la place, puis relancez `--undo` |
+| Le journal est abîmé | Rien n'est déplacé : une erreur, et le code de sortie `1` |
+| Le journal a été écrit pour un autre dossier | Refusé, rien n'est déplacé, code de sortie `1` |
+| `--config` ou `--lowercase` avec `--undo` | Refusé, car ils n'ont de sens que pour ranger : code de sortie `2` |
+
+**Limites connues.** Le journal est retrouvé à partir du chemin du dossier. Si ce chemin change, l'annulation ne trouve pas de journal et répond `Nothing to undo` : elle ne déplace jamais rien au mauvais endroit.
+
+- Le dossier a été renommé ou déplacé depuis le rangement.
+- Sous Linux, après un changement de langue du système, `xdg-user-dirs` peut renommer `~/Downloads` dans la nouvelle langue (`~/Téléchargements`). Sous macOS et Windows, seul le nom affiché est traduit (`.localized`, `desktop.ini`) : le vrai chemin ne change pas.
+- Sous macOS, le disque ignore la casse : `~/downloads` et `~/Downloads` sont le même dossier, mais deux chemins différents. Utilisez la même écriture que pour le rangement.
+- Seul le dernier rangement d'un dossier peut être annulé.
+
 ### Structure du projet
 
 ```text
@@ -476,8 +578,10 @@ mimedy/
 │   ├── config.py            # Chargement et validation de la configuration
 │   ├── config.example.yaml  # Configuration d'exemple commentée
 │   ├── organizer.py         # Règles de classement, planification et déplacements
+│   ├── journal.py           # Journal des déplacements d'un rangement
+│   ├── undo.py              # Annulation du dernier rangement, à partir de son journal
 │   └── errors.py            # Exceptions du projet
-└── tests/                   # Tests pytest (configuration, règles, plan, CLI)
+└── tests/                   # Tests pytest (configuration, règles, plan, journal, annulation, CLI)
 ```
 
 ### Développement
@@ -501,7 +605,7 @@ uv run mimedy --help        # lancer la version en cours de développement
 - [x] Publication sur PyPI (`uv tool install mimedy`)
 - [x] Ignorer les fichiers système (`.DS_Store`, `.localized`, `Thumbs.db`, `desktop.ini`…), avec une option pour les ranger quand même
 - [x] Motifs de fichiers à ignorer (téléchargements en cours : `*.part`, `*.crdownload`…)
-- [ ] Annuler le dernier rangement (`--undo`)
+- [x] Annuler le dernier rangement (`--undo`)
 - [ ] Installation avec Homebrew (`brew install ochapeau/tap/mimedy`), dès que Magika publiera son futur moteur en Rust : Homebrew compile les dépendances Python depuis leurs sources, et `onnxruntime`, dont Magika dépend aujourd'hui, n'existe qu'en paquets précompilés
 - [ ] Interface en terminal (TUI), en option
 
