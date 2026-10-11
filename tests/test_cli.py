@@ -165,6 +165,75 @@ def test_no_journal_when_nothing_is_moved(
     assert not journal_path(downloads).exists()
 
 
+# --- Risky folders --------------------------------------------------------------
+
+
+def test_home_folder_gets_a_warning(
+    downloads: Path,
+    write_config: Callable[..., Path],
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # Organizing the home folder would send every dotfile to Hidden/
+    monkeypatch.setenv("HOME", str(downloads))  # downloads plays the home folder
+    config_path = write_config()
+
+    result = runner.invoke(
+        app, [str(downloads), "--config", str(config_path), "--dry-run"]
+    )
+
+    assert result.exit_code == 0  # Success: a warning, not an error
+    assert any("is your home folder" in message for message in caplog.messages)
+
+
+def test_git_repository_gets_a_warning(
+    downloads: Path,
+    write_config: Callable[..., Path],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # Organizing a code project would scatter its source files
+    (downloads / ".git").mkdir()
+    config_path = write_config()
+
+    result = runner.invoke(
+        app, [str(downloads), "--config", str(config_path), "--dry-run"]
+    )
+
+    assert result.exit_code == 0  # Success: a warning, not an error
+    assert any("is a Git repository" in message for message in caplog.messages)
+
+
+def test_ordinary_folder_gets_no_warning(
+    downloads: Path,
+    write_config: Callable[..., Path],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # A warning on every run would soon be ignored: only risky folders get one
+    config_path = write_config()
+
+    runner.invoke(app, [str(downloads), "--config", str(config_path), "--dry-run"])
+
+    assert not any(
+        "is your home folder" in message or "is a Git repository" in message
+        for message in caplog.messages
+    )
+
+
+def test_yes_goes_on_despite_the_warning(
+    downloads: Path, write_config: Callable[..., Path]
+) -> None:
+    # Only a warning: a script with --yes stays predictable, and --undo can
+    # move the files back
+    (downloads / ".git").mkdir()
+    (downloads / "data.csv").write_text("a,b\n1,2\n", encoding="utf-8")
+    config_path = write_config("extensions:\n  .csv: Data\n")
+
+    result = runner.invoke(app, [str(downloads), "--config", str(config_path), "--yes"])
+
+    assert result.exit_code == 0  # Success
+    assert (downloads / "Data/data.csv").exists()
+
+
 # --- Undo -------------------------------------------------------------------------
 
 

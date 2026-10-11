@@ -83,6 +83,28 @@ def plural(count: int, word: str) -> str:
     return f"{count} {word}" if count == 1 else f"{count} {word}s"
 
 
+def warn_about_risky_folder(directory: Path, hidden: str) -> None:
+    """Warn when directory is a folder that is almost never meant to be organized.
+
+    Only a warning: the confirmation still lets the user go on, --yes goes on
+    without asking, and --undo can move the files back.
+    """
+    # directory was resolved by Typer: resolve the home folder too (on macOS,
+    # /var and /private/var are the same folder under two names)
+    if directory == Path.home().resolve():
+        logger.warning(
+            "%s is your home folder: its hidden files (.zshrc, .gitconfig...) "
+            "would go to %s/",
+            directory,
+            hidden,
+        )
+    # .git may be a folder, or a file in a Git worktree: exists() covers both
+    if (directory / ".git").exists():
+        logger.warning(
+            "%s is a Git repository: organizing it would scatter its files", directory
+        )
+
+
 def undo_last_run(directory: Path, *, dry_run: bool, yes: bool) -> None:
     """Move the files of the last run in directory back, then exit.
 
@@ -217,6 +239,8 @@ def main(  # noqa: PLR0913, PLR0917 (one parameter per CLI option)
 
     # Phase 1: decide where every file goes, without touching anything
     logger.info("Organizing %s", directory)
+    # Before the plan, so that the warning is read before the confirmation
+    warn_about_risky_folder(directory, config.hidden)
     plan = plan_moves(directory, magika, config, lowercase=lowercase)
     log_plan(plan)
     planning_code = EXIT_FAILURES if plan.failures else EXIT_OK
