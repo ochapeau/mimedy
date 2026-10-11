@@ -14,11 +14,12 @@ from mimedy.organizer import (
     blocking_file,
     display_target,
     execute,
+    missing_folders,
     plan_moves,
     printable,
     unique_path,
 )
-from tests.fakes import FakeMagika
+from tests.fakes import FakeMagika, FakeRecorder
 
 # --- Planning -------------------------------------------------------------------
 
@@ -418,6 +419,105 @@ def test_vanished_source_is_a_failure_and_others_are_moved(
 
     assert (tmp_path / "Data/data.csv").exists()  # the other file was moved
     assert [failure.source for failure in failures] == [photo]
+
+
+# --- Recording the moves ----------------------------------------------------------
+
+
+def test_moves_are_recorded_in_order(
+    tmp_path: Path, make_file: Callable[..., Path]
+) -> None:
+    # The journal must list the moves in the order they happened
+    data = make_file("data.csv")
+    photo = make_file("photo.jpg")
+    config = Config(extensions={".csv": "Data", ".jpg": "Photos"})
+    plan = plan_moves(tmp_path, FakeMagika(), config)
+    recorder = FakeRecorder()
+
+    execute(plan, recorder)
+
+    moves = [event for event in recorder.events if event[0] == "move"]
+    assert moves == [
+        ("move", data, tmp_path / "Data/data.csv"),
+        ("move", photo, tmp_path / "Photos/photo.jpg"),
+    ]
+
+
+def test_created_folders_are_recorded_top_first_before_the_move(
+    tmp_path: Path, make_file: Callable[..., Path]
+) -> None:
+    # Code/ and Code/Python/ are created for the script: both are recorded, the
+    # top one first, and before the move (undo removes the deepest first)
+    script = make_file("script.py")
+    config = Config(extensions={".py": "Code/Python"})
+    plan = plan_moves(tmp_path, FakeMagika(), config)
+    recorder = FakeRecorder()
+
+    execute(plan, recorder)
+
+    assert recorder.events == [
+        ("created_dir", tmp_path / "Code"),
+        ("created_dir", tmp_path / "Code/Python"),
+        ("move", script, tmp_path / "Code/Python/script.py"),
+    ]
+
+
+def test_existing_folder_is_not_recorded(
+    tmp_path: Path, make_file: Callable[..., Path]
+) -> None:
+    # Undo must never remove a folder that was there before the run
+    make_file("Data/old.csv")  # Data/ already exists
+    data = make_file("data.csv")
+    config = Config(extensions={".csv": "Data"})
+    plan = plan_moves(tmp_path, FakeMagika(), config)
+    recorder = FakeRecorder()
+
+    execute(plan, recorder)
+
+    # Only the move: no "created_dir" event
+    assert recorder.events == [("move", data, tmp_path / "Data/data.csv")]
+
+
+def test_folder_created_for_a_failed_move_is_still_recorded(
+    tmp_path: Path, make_file: Callable[..., Path]
+) -> None:
+    # The source vanished after planning: Data/ gets created, then the move
+    # fails. The folder is recorded anyway (undo can remove it), the move not
+    data = make_file("data.csv")
+    config = Config(extensions={".csv": "Data"})
+    plan = plan_moves(tmp_path, FakeMagika(), config)
+    data.unlink()
+    recorder = FakeRecorder()
+
+    failures = execute(plan, recorder)
+
+    assert [failure.source for failure in failures] == [data]
+    assert recorder.events == [("created_dir", tmp_path / "Data")]
+
+
+@pytest.mark.parametrize(
+    ("existing", "folder", "expected"),
+    [
+        (["Code/old.py"], "Code", []),  # already there: nothing missing
+        ([], "Code", ["Code"]),  # one level
+        ([], "Code/Python", ["Code", "Code/Python"]),  # top first
+        (["Code/old.py"], "Code/Python", ["Code/Python"]),  # only the deepest
+    ],
+)
+def test_missing_folders_are_listed_top_first(
+    tmp_path: Path,
+    make_file: Callable[..., Path],
+    existing: list[str],
+    folder: str,
+    expected: list[str],
+) -> None:
+    # The helper alone: nothing is created, the result is a real list
+    for name in existing:
+        make_file(name)
+
+    assert missing_folders(tmp_path / folder) == [tmp_path / name for name in expected]
+    if expected:
+        assert not (tmp_path / folder).exists()  # only listed, never created
 
 
 # --- Small helpers --------------------------------------------------------------

@@ -41,3 +41,20 @@ class FakeMagika:
             output = FakeOutput(self.mime_type, self.group)
             return FakeResult(ok=False, status="permission_error", output=output)
         return FakeResult(self.ok, self.status, FakeOutput(self.mime_type, self.group))
+
+
+@dataclass
+class FakeRecorder:
+    """Keep everything execute() reports, in the order it happens.
+
+    Each event is a tuple: ("created_dir", folder) or ("move", source, target).
+    A single list keeps the order between both kinds of events.
+    """
+
+    events: list[tuple[object, ...]] = field(default_factory=list)
+
+    def record_move(self, source: Path, target: Path) -> None:
+        self.events.append(("move", source, target))
+
+    def record_created_dir(self, path: Path) -> None:
+        self.events.append(("created_dir", path))

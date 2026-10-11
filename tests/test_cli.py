@@ -9,6 +9,7 @@ import pytest
 from typer.testing import CliRunner
 
 from mimedy.config import default_config_path
+from mimedy.journal import JournalMove, journal_path, read_journal
 from mimedy.main import app, plural
 from tests.fakes import FakeMagika
 
@@ -115,6 +116,53 @@ def test_yes_moves_files_without_asking(
     assert result.exit_code == 0  # Success
     assert "Move" not in result.output
     assert files_in(downloads) == ["Data", "Data/data.csv"]
+
+
+# --- Journal for --undo ----------------------------------------------------------
+
+
+def test_a_run_writes_its_journal(
+    downloads: Path, write_config: Callable[..., Path]
+) -> None:
+    # Every real run records its moves, so that --undo can reverse them
+    data = downloads / "data.csv"
+    data.write_text("a,b\n1,2\n", encoding="utf-8")
+    config_path = write_config("extensions:\n  .csv: Data\n")
+
+    result = runner.invoke(app, [str(downloads), "--config", str(config_path), "--yes"])
+
+    assert result.exit_code == 0  # Success
+    journal = read_journal(journal_path(downloads))
+    assert journal.directory == downloads
+    assert journal.moves == [
+        JournalMove(source=data, target=downloads / "Data/data.csv")
+    ]
+    assert journal.created_dirs == [downloads / "Data"]
+
+
+@pytest.mark.parametrize(
+    ("options", "answer"),
+    [
+        (["--dry-run"], None),  # only shows the plan
+        ([], "n\n"),  # the user answers no
+    ],
+)
+def test_no_journal_when_nothing_is_moved(
+    downloads: Path,
+    write_config: Callable[..., Path],
+    options: list[str],
+    answer: str | None,
+) -> None:
+    # Without a real run, the journal of the previous run must stay untouched:
+    # here, there was none, so there must still be none
+    (downloads / "data.csv").write_text("a,b\n1,2\n", encoding="utf-8")
+    config_path = write_config("extensions:\n  .csv: Data\n")
+
+    runner.invoke(
+        app, [str(downloads), "--config", str(config_path), *options], input=answer
+    )
+
+    assert not journal_path(downloads).exists()
 
 
 # --- Verbose mode ---------------------------------------------------------------

@@ -11,6 +11,7 @@ from magika import Magika
 
 from mimedy.config import default_config_path, load_config
 from mimedy.errors import ConfigError
+from mimedy.journal import JournalWriter, journal_path
 from mimedy.organizer import execute, log_plan, plan_moves
 
 # Exit codes
@@ -169,8 +170,13 @@ def main(  # noqa: PLR0913, PLR0917 (one parameter per CLI option)
     if not yes:
         typer.confirm(f"Move {files_to_move}?", abort=True)
 
-    # Phase 2: perform the plan
-    failures = execute(plan)
+    # Phase 2: perform the plan, recording every folder created and every move
+    # in the journal of this folder, for --undo. Dry runs, declined
+    # confirmations and empty plans stopped above: they leave no journal
+    path = journal_path(directory)
+    logger.debug("Recording the moves in %s", path)
+    with JournalWriter(path, directory) as journal:
+        failures = execute(plan, recorder=journal)
     logger.info(
         "Done: %d moved, %d failed", len(plan.moves) - len(failures), len(failures)
     )
