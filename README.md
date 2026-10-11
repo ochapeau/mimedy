@@ -73,6 +73,8 @@ uvx mimedy ~/Downloads --dry-run
 ### Usage
 
 > 💡 mimedy always shows the full plan and asks for confirmation before moving anything.
+>
+> ⚠️ It also warns you before organizing your home folder or a Git repository, where moving files breaks things (dotfiles, source code). It is only a warning: the confirmation still lets you go on, and `--yes` goes on without asking.
 
 ```bash
 # Show the plan, then confirm
@@ -319,6 +321,8 @@ uvx mimedy ~/Downloads --dry-run
 ### Utilisation
 
 > 💡 mimedy affiche toujours le plan complet et demande confirmation avant de déplacer quoi que ce soit.
+>
+> ⚠️ Il vous avertit aussi avant de ranger votre dossier personnel ou un dépôt Git, où déplacer des fichiers casse quelque chose (fichiers de configuration cachés, code source). Ce n'est qu'un avertissement : la confirmation vous laisse continuer, et `--yes` continue sans rien demander.
 
 ```bash
 # Afficher le plan, puis confirmer
