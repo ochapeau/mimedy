@@ -6,6 +6,7 @@ import shutil
 from dataclasses import dataclass, field
 from fnmatch import fnmatchcase
 from pathlib import Path, PurePath
+from typing import Protocol
 
 from magika import Magika
 
@@ -40,6 +41,13 @@ SYSTEM_FILES = frozenset(
 # macOS writes "._photo.jpg" next to "photo.jpg" on USB drives and network
 # shares, to keep its metadata: it only makes sense next to its file
 APPLEDOUBLE_PREFIX = "._"
+
+
+class MoveRecorder(Protocol):
+    """Anything that wants to know about the moves as they happen."""
+
+    def record_move(self, source: Path, target: Path) -> None: ...
+    def record_created_dir(self, path: Path) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -271,10 +279,30 @@ def log_plan(plan: Plan) -> None:
         logger.warning("Skipped '%s': %s", name, failure.reason)
 
 
-def apply_move(move: Move) -> None:
-    """Move one file to its planned target, creating its folder if needed."""
-    move.target.parent.mkdir(parents=True, exist_ok=True)
+def missing_folders(folder: Path) -> list[Path]:
+    """Return the folders that do not exist yet on the way to folder, top first.
 
+    With Downloads/ existing but not Downloads/Code/: for Downloads/Code/Python,
+    [Downloads/Code, Downloads/Code/Python]. Empty if folder already exists.
+    Nothing is created.
+    """
+    # The organized folder exists, so the walk stops there at the latest
+    current = folder
+    missing: list[Path] = []
+    while not current.exists():
+        missing.append(current)
+        current = current.parent
+    missing.reverse()  # found bottom up, created top down
+    return missing
+
+
+def apply_move(move: Move, recorder: MoveRecorder | None = None) -> None:
+    """Move one file to its planned target, creating its folder if needed.
+
+    The recorder is told about each folder as soon as it is created, then
+    about the move once it succeeded: if the move fails, the folders created
+    for it are still recorded, so that --undo can remove them.
+    """
     # The plan promised this exact target: never rename it again behind the
     # user's back if something appeared there since planning
     if move.target.exists():
@@ -282,24 +310,39 @@ def apply_move(move: Move) -> None:
             errno.EEXIST, "Target appeared since planning", str(move.target)
         )
 
+    # Look for the missing folders before creating them: afterwards, none of
+    # them would look missing anymore
+    created = missing_folders(move.target.parent)
+    move.target.parent.mkdir(parents=True, exist_ok=True)
+    if recorder is not None:
+        for folder in created:
+            recorder.record_created_dir(folder)
+
     shutil.move(move.source, move.target)
+    # Only reached if the move succeeded
+    if recorder is not None:
+        recorder.record_move(move.source, move.target)
 
 
-def try_move(move: Move) -> Failure | None:
+def try_move(move: Move, recorder: MoveRecorder | None = None) -> Failure | None:
     """Apply a move, returning a Failure instead of raising."""
     try:
-        apply_move(move)
+        apply_move(move, recorder)
     except OSError as e:
         return Failure(move.source, describe_error(e))
     return None
 
 
-def execute(plan: Plan) -> list[Failure]:
-    """Perform the planned moves. A failed move doesn't stop the others."""
+def execute(plan: Plan, recorder: MoveRecorder | None = None) -> list[Failure]:
+    """Perform the planned moves. A failed move doesn't stop the others.
+
+    The recorder, if any, is told about every folder created and every move
+    made, as they happen (main.py passes the journal of the run).
+    """
     failures: list[Failure] = []
 
     for move in plan.moves:
-        failure = try_move(move)
+        failure = try_move(move, recorder)
         name = printable(move.source.name)
         if failure:
             failures.append(failure)

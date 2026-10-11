@@ -62,7 +62,16 @@ class Config:
 
 
 def default_config_path() -> Path:
-    """Return the per-user config file: XDG on Linux and macOS, APPDATA on Windows."""
+    """Return the per-user config file.
+
+    - Linux and macOS: $XDG_CONFIG_HOME/mimedy/config.yaml, which is
+      ~/.config/mimedy/config.yaml by default
+    - Windows: %APPDATA%\\mimedy\\config.yaml, which is
+      C:\\Users\\<name>\\AppData\\Roaming\\mimedy\\config.yaml by default
+
+    The config is a user setting: on Windows it goes in Roaming, which follows
+    the user from one computer to another on a company network.
+    """
     if sys.platform == "win32":
         base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
     else:
@@ -91,7 +100,7 @@ def read_yaml(config_path: Path) -> dict:
         msg = f"Cannot read {config_path}: the file is not UTF-8 text, save it as UTF-8"
         raise ConfigError(msg) from e
     except yaml.YAMLError as e:
-        msg = f"Invalid YAML in {config_path}: {e}"
+        msg = f"Invalid YAML in {config_path}: {describe_error(e)}"
         raise ConfigError(msg) from e
 
     if not isinstance(data, dict):
