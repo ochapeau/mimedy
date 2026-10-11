@@ -10,9 +10,15 @@ import typer
 from magika import Magika
 
 from mimedy.config import default_config_path, load_config
-from mimedy.errors import ConfigError
-from mimedy.journal import JournalWriter, journal_path
+from mimedy.errors import ConfigError, InvalidJournalLineError, JournalError
+from mimedy.journal import JournalWriter, journal_path, read_journal
 from mimedy.organizer import execute, log_plan, plan_moves
+from mimedy.undo import (
+    log_undo_plan,
+    plan_undo,
+    remove_created_folders,
+    update_journal,
+)
 
 # Exit codes
 EXIT_OK = 0
@@ -77,6 +83,54 @@ def plural(count: int, word: str) -> str:
     return f"{count} {word}" if count == 1 else f"{count} {word}s"
 
 
+def undo_last_run(directory: Path, *, dry_run: bool, yes: bool) -> None:
+    """Move the files of the last run in directory back, then exit.
+
+    Neither the config nor Magika are loaded: the journal holds everything,
+    and a config made invalid since the run cannot prevent the undo.
+    """
+    logger.info("Undoing the last run in %s", directory)
+    path = journal_path(directory)
+    try:
+        journal = read_journal(path)
+        # Refuse rather than guess: the journal must be the one of this folder
+        if journal is not None and journal.directory != directory:
+            reason = f"written for {journal.directory}, not for this folder"
+            raise InvalidJournalLineError(path, 1, reason)
+    except JournalError as e:
+        # A message for the user, not a traceback: logging.exception would add it
+        logger.error("%s", e)  # noqa: TRY400
+        raise typer.Exit(EXIT_FAILURES) from e
+
+    if journal is None:
+        logger.info("Nothing to undo in %s", directory)
+        raise typer.Exit(EXIT_OK)
+
+    plan = plan_undo(journal)
+    log_undo_plan(plan)
+    files_back = plural(len(plan.moves), "file")
+    logger.info("%s to move back, %d skipped", files_back, len(plan.failures))
+
+    if dry_run:
+        logger.info("Dry run: nothing was moved")
+        raise typer.Exit(EXIT_FAILURES if plan.failures else EXIT_OK)
+
+    if plan.moves and not yes:
+        typer.confirm(f"Move back {files_back}?", abort=True)
+
+    # No recorder: the undo itself is not recorded in a journal
+    failures = execute(plan)
+    removed = remove_created_folders(journal)
+    update_journal(path, journal, plan.failures + failures, removed)
+    logger.info(
+        "Done: %d moved back, %d failed, %s removed",
+        len(plan.moves) - len(failures),
+        len(failures),
+        plural(len(removed), "empty folder"),
+    )
+    raise typer.Exit(EXIT_FAILURES if failures or plan.failures else EXIT_OK)
+
+
 @app.command()
 def main(  # noqa: PLR0913, PLR0917 (one parameter per CLI option)
     directory: Annotated[
@@ -111,6 +165,12 @@ def main(  # noqa: PLR0913, PLR0917 (one parameter per CLI option)
         bool,
         typer.Option("--verbose", "-v", help="Show the rule applied to each file."),
     ] = False,
+    undo: Annotated[
+        bool,
+        typer.Option(
+            "--undo", "-u", help="Move the files of the last run back, then stop."
+        ),
+    ] = False,
     show_version_flag: Annotated[
         bool,
         typer.Option(
@@ -133,6 +193,17 @@ def main(  # noqa: PLR0913, PLR0917 (one parameter per CLI option)
 ) -> None:
     """Organize a folder by real file type, detected from content with Magika."""
     init_logging(verbose=verbose)
+
+    if undo:
+        # These options only mean something when organizing: refuse them
+        # rather than silently ignore them
+        if config_path is not None:
+            msg = "cannot be combined with --undo"
+            raise typer.BadParameter(msg, param_hint="--config")
+        if lowercase:
+            msg = "cannot be combined with --undo"
+            raise typer.BadParameter(msg, param_hint="--lowercase")
+        undo_last_run(directory, dry_run=dry_run, yes=yes)
 
     try:
         config = load_config(config_path)

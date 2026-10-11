@@ -9,7 +9,7 @@ import pytest
 from typer.testing import CliRunner
 
 from mimedy.config import default_config_path
-from mimedy.journal import JournalMove, journal_path, read_journal
+from mimedy.journal import JournalMove, JournalWriter, journal_path, read_journal
 from mimedy.main import app, plural
 from tests.fakes import FakeMagika
 
@@ -163,6 +163,161 @@ def test_no_journal_when_nothing_is_moved(
     )
 
     assert not journal_path(downloads).exists()
+
+
+# --- Undo -------------------------------------------------------------------------
+
+
+def test_undo_restores_the_folder_exactly(
+    downloads: Path, write_config: Callable[..., Path]
+) -> None:
+    # The whole point of --undo: after a run then an undo, the folder is back
+    # exactly as it was, created folders included
+    (downloads / "data.csv").write_text("a,b\n1,2\n", encoding="utf-8")
+    (downloads / "script.py").write_text("print(1)\n", encoding="utf-8")
+    config_path = write_config("extensions:\n  .csv: Data\n  .py: Code/Python\n")
+    files_before = files_in(downloads)
+    runner.invoke(app, [str(downloads), "--config", str(config_path), "--yes"])
+
+    result = runner.invoke(app, [str(downloads), "--undo", "--yes"])
+
+    assert result.exit_code == 0
+    assert files_before == files_in(downloads)
+    assert not journal_path(downloads).exists()
+
+
+def test_undo_dry_run_changes_nothing(
+    downloads: Path, write_config: Callable[..., Path]
+) -> None:
+    # --dry-run shows the moves back, and leaves the files and the journal alone
+    (downloads / "data.csv").write_text("a,b\n1,2\n", encoding="utf-8")
+    config_path = write_config("extensions:\n  .csv: Data\n")
+    runner.invoke(app, [str(downloads), "--config", str(config_path), "--yes"])
+    files_after_run = files_in(downloads)
+
+    result = runner.invoke(app, [str(downloads), "--undo", "--dry-run"])
+
+    assert result.exit_code == 0
+    assert files_in(downloads) == files_after_run
+    assert journal_path(downloads).exists()  # kept for the real --undo
+
+
+def test_undo_asks_before_moving_back(
+    downloads: Path, write_config: Callable[..., Path]
+) -> None:
+    # Without --yes, the undo asks first, like a run: answering no changes
+    # nothing, and keeps the journal for a later --undo
+    (downloads / "data.csv").write_text("a,b\n1,2\n", encoding="utf-8")
+    config_path = write_config("extensions:\n  .csv: Data\n")
+    runner.invoke(app, [str(downloads), "--config", str(config_path), "--yes"])
+    files_after_run = files_in(downloads)
+
+    result = runner.invoke(app, [str(downloads), "--undo"], input="n\n")
+
+    assert result.exit_code == 1  # Declined: the user answered no
+    assert "Move back 1 file?" in result.output
+    assert files_in(downloads) == files_after_run
+    assert journal_path(downloads).exists()
+
+
+def test_undo_skips_a_file_no_longer_there(
+    downloads: Path,
+    write_config: Callable[..., Path],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # The user deleted one organized file since the run: the others still go
+    # back, and the missing one is reported
+    (downloads / "data.csv").write_text("a,b\n1,2\n", encoding="utf-8")
+    (downloads / "notes.txt").write_text("hello\n", encoding="utf-8")
+    config_path = write_config("extensions:\n  .csv: Data\n  .txt: Text\n")
+    runner.invoke(app, [str(downloads), "--config", str(config_path), "--yes"])
+    (downloads / "Data/data.csv").unlink()
+
+    result = runner.invoke(app, [str(downloads), "--undo", "--yes"])
+
+    assert result.exit_code == 1  # At least one file could not be processed
+    assert "Skipped 'Data/data.csv': no longer there" in caplog.messages
+    assert files_in(downloads) == ["notes.txt"]  # both created folders removed
+    # The deleted file is forgotten: nothing is left to undo
+    assert not journal_path(downloads).exists()
+
+
+def test_undo_without_journal_has_nothing_to_undo(
+    downloads: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # A folder never organized: not an error, just nothing to do
+    result = runner.invoke(app, [str(downloads), "--undo"])
+
+    assert result.exit_code == 0
+    assert any(message.startswith("Nothing to undo") for message in caplog.messages)
+
+
+def test_second_undo_has_nothing_to_undo(
+    downloads: Path, write_config: Callable[..., Path], caplog: pytest.LogCaptureFixture
+) -> None:
+    # Only the last run can be undone, and only once
+    (downloads / "data.csv").write_text("a,b\n1,2\n", encoding="utf-8")
+    config_path = write_config("extensions:\n  .csv: Data\n")
+    runner.invoke(app, [str(downloads), "--config", str(config_path), "--yes"])
+    runner.invoke(app, [str(downloads), "--undo", "--yes"])
+
+    result = runner.invoke(app, [str(downloads), "--undo", "--yes"])
+
+    assert result.exit_code == 0
+    assert any(message.startswith("Nothing to undo") for message in caplog.messages)
+
+
+@pytest.mark.parametrize(
+    ("options", "option"),
+    [
+        (["--config", "config.yaml"], "--config"),
+        (["--lowercase"], "--lowercase"),
+    ],
+)
+def test_undo_refuses_options_that_only_organize(
+    downloads: Path, options: list[str], option: str
+) -> None:
+    # Refused rather than silently ignored: they mean nothing for an undo
+    result = runner.invoke(app, [str(downloads), "--undo", *options])
+
+    assert result.exit_code == 2  # Usage error
+    assert "cannot be combined with --undo" in result.output
+
+
+def test_damaged_journal_exits_with_1(
+    downloads: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Refuse rather than guess: a journal that cannot be trusted moves nothing
+    path = journal_path(downloads)
+    path.parent.mkdir(parents=True)
+    path.write_text("not json\n", encoding="utf-8")
+
+    result = runner.invoke(app, [str(downloads), "--undo", "--yes"])
+
+    assert result.exit_code == 1
+    assert any(
+        "Invalid line 1 of the journal" in message for message in caplog.messages
+    )
+
+
+def test_journal_of_another_folder_is_refused(
+    downloads: Path, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Almost impossible with the hash, but never move files of another folder.
+    # The file of the other folder really exists: without the check, the undo
+    # would move it back, so the test cannot pass for another reason
+    other = tmp_path / "other"
+    moved = other / "Data/data.csv"
+    moved.parent.mkdir(parents=True)
+    moved.write_text("a,b\n1,2\n", encoding="utf-8")
+    with JournalWriter(journal_path(downloads), other) as writer:
+        writer.record_move(other / "data.csv", moved)
+
+    result = runner.invoke(app, [str(downloads), "--undo", "--yes"])
+
+    assert result.exit_code == 1  # The journal cannot be trusted
+    assert moved.exists()  # the other folder was left alone
+    assert any("not for this folder" in message for message in caplog.messages)
 
 
 # --- Verbose mode ---------------------------------------------------------------
