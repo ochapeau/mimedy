@@ -6,6 +6,7 @@ from importlib.resources import files
 from pathlib import Path
 
 import pytest
+import typer.rich_utils
 from typer.testing import CliRunner
 
 from mimedy.config import default_config_path
@@ -28,14 +29,20 @@ def downloads(tmp_path: Path) -> Path:
 
 
 @pytest.fixture(autouse=True)
-def fixed_terminal_width(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Give Rich the same terminal width on every machine.
+def plain_terminal(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Give Rich the same plain terminal on every machine: fixed width, no color.
 
     Typer shows usage errors in a Rich panel that wraps long lines at the
-    terminal width (COLUMNS, 80 by default). Fixed here, an exported COLUMNS
-    can no longer change where messages are cut, and so what the tests find.
+    terminal width (COLUMNS, 80 by default): fixed here, an exported COLUMNS
+    can no longer change where messages are cut. Typer also forces colors
+    when GITHUB_ACTIONS, FORCE_COLOR or PY_COLORS is set, read once when it is
+    imported: color codes then split the checked text ("--undo" is colored),
+    so the tests failed in CI only.
     """
     monkeypatch.setenv("COLUMNS", "100")
+    monkeypatch.setattr(typer.rich_utils, "FORCE_TERMINAL", None)
+    for name in ("FORCE_COLOR", "PY_COLORS"):  # Rich reads FORCE_COLOR itself
+        monkeypatch.delenv(name, raising=False)
 
 
 def files_in(folder: Path) -> list[str]:
